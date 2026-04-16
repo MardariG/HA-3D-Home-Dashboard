@@ -324,14 +324,26 @@ class ThreeDHomeDashboard extends HTMLElement {
     });
     obj.traverse((c) => {
       if (c.isMesh) {
+        const _glassRe = /glass|vitre|vetro|vidrio|glas|cristal|transparent|window|fenster|finestra/i;
         const upgradeMat = (m) => {
           if (!m) return new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.7, metalness: 0.1, side: THREE.DoubleSide });
           const sm = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide });
           if (m.color) sm.color = m.color;
           if (m.map) sm.map = m.map;
           if (m.opacity < 1) { sm.opacity = m.opacity; sm.transparent = true; }
-          sm.roughness = m.shininess ? 1.0 - Math.min(m.shininess / 150, 0.85) : 0.7;
-          sm.metalness = m.specular ? Math.min((m.specular.r + m.specular.g + m.specular.b) / 3, 0.5) : 0.05;
+          // Detect glass by material name
+          const mName = m.name || "";
+          const isGlass = !sm.transparent && _glassRe.test(mName);
+          if (isGlass) {
+            sm.opacity = 0.3;
+            sm.transparent = true;
+            sm.color.set(0xaaccee);
+            sm.roughness = 0.05;
+            sm.metalness = 0.1;
+          } else {
+            sm.roughness = m.shininess ? 1.0 - Math.min(m.shininess / 150, 0.85) : 0.7;
+            sm.metalness = m.specular ? Math.min((m.specular.r + m.specular.g + m.specular.b) / 3, 0.5) : 0.05;
+          }
           return sm;
         };
         if (!materials) {

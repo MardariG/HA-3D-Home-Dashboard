@@ -39,6 +39,19 @@ _SH3D_COLORS = {
 
 
 
+_GLASS_KEYWORDS = (
+    "glass", "vitre", "vetro", "vidrio",
+    "glas", "cristal", "transparent", "window",
+    "fenster", "finestra",
+)
+
+
+def _is_glass_material(name):
+    """Check if material name suggests glass/transparent."""
+    low = name.lower()
+    return any(kw in low for kw in _GLASS_KEYWORDS)
+
+
 def _manual_extract(zip_path, dest_dir):
     """Extract SH3D ZIP handling Java-serialized Home entry."""
     os.makedirs(dest_dir, exist_ok=True)
@@ -405,6 +418,14 @@ def assemble_sh3d(zip_path, output_dir):
                                 new_lines.append(ml)
                         else:
                             new_lines.append(ml)
+                    # Add transparency for glass materials
+                    if _is_glass_material(mname):
+                        has_d = any(
+                            ln.strip().startswith('d ')
+                            for ln in new_lines
+                        )
+                        if not has_d:
+                            new_lines.append("d 0.3")
                     all_materials[new_name] = new_lines
 
         # Handle standalone OBJ materials (no mtllib but has usemtl)
@@ -419,13 +440,16 @@ def assemble_sh3d(zip_path, output_dir):
                 rgb = _SH3D_COLORS.get(
                     sm, (0.7, 0.7, 0.7)
                 )
-                all_materials[new_name] = [
+                mat_lines = [
                     f"Ka 0.2 0.2 0.2",
                     f"Kd {rgb[0]:.3f} {rgb[1]:.3f} {rgb[2]:.3f}",
                     f"Ks 0.1 0.1 0.1",
                     f"Ns 20",
                     f"illum 2",
                 ]
+                if _is_glass_material(sm):
+                    mat_lines.append("d 0.3")
+                all_materials[new_name] = mat_lines
 
         # Override color from XML if set
         xml_color = item.get("color")
