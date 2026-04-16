@@ -3,7 +3,6 @@ import logging
 import os
 import json
 import shutil
-import zipfile
 import voluptuous as vol
 
 from homeassistant.core import HomeAssistant
@@ -38,40 +37,21 @@ ALLOWED_EXT = (".sh3d",)
 
 
 def _extract_sh3d(zip_path, dest_dir):
+    from .sh3d_assembler import assemble_sh3d
     ed = os.path.join(
         dest_dir, "_sh3d_extracted"
     )
-    if os.path.exists(ed):
-        shutil.rmtree(ed)
-    os.makedirs(ed, exist_ok=True)
-    obj_file = None
-    mtl_file = None
     try:
-        with zipfile.ZipFile(zip_path) as zf:
-            zf.extractall(ed)
-        for root, dirs, files in os.walk(ed):
-            for f in files:
-                fl = f.lower()
-                fp = os.path.join(root, f)
-                if fl.endswith(".obj"):
-                    if obj_file is None:
-                        obj_file = fp
-                    else:
-                        c = os.path.getsize(fp)
-                        o = os.path.getsize(
-                            obj_file
-                        )
-                        if c > o:
-                            obj_file = fp
-                elif fl.endswith(".mtl"):
-                    mtl_file = fp
+        result = assemble_sh3d(
+            zip_path, ed
+        )
+        if result is None:
+            _LOGGER.error("Assembly failed")
+            return None
+        return (result, None)
     except Exception:
-        _LOGGER.exception("sh3d extract fail")
+        _LOGGER.exception("sh3d fail")
         return None
-    if obj_file is None:
-        _LOGGER.error("No OBJ in .sh3d")
-        return None
-    return (obj_file, mtl_file)
 
 
 async def _setup_integration(hass):
@@ -439,22 +419,11 @@ async def ws_get_model_info(hass, conn, msg):
             mp, "_sh3d_extracted"
         )
         obj_rel = None
-        if os.path.isdir(ed):
-            for rt, ds, fs in os.walk(ed):
-                for f in fs:
-                    fl = f.lower()
-                    if fl.endswith(".obj"):
-                        fp = os.path.join(
-                            rt, f
-                        )
-                        obj_rel = (
-                            os.path.relpath(
-                                fp, ed
-                            )
-                        )
-                        break
-                if obj_rel:
-                    break
+        ap = os.path.join(
+            ed, "assembled.obj"
+        )
+        if os.path.isfile(ap):
+            obj_rel = "assembled.obj"
         result["obj_path"] = obj_rel
     conn.send_result(msg["id"], result)
 
