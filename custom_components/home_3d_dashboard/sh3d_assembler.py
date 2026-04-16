@@ -582,7 +582,7 @@ def assemble_sh3d(zip_path, output_dir):
             gname, len(obj["v"]), len(mtl_map),
         )
 
-    # --- Walls ---
+    # --- Walls with door/window cutouts ---
     wi = 0
     wall_mtl_name = "wall_material"
     all_materials[wall_mtl_name] = [
@@ -592,6 +592,117 @@ def assemble_sh3d(zip_path, output_dir):
         "Ns 10",
         "illum 2",
     ]
+
+    # Collect door/window openings (in cm)
+    openings = []
+    for item in items:
+        if item["tag"] == "doorOrWindow":
+            openings.append({
+                "x": item["x"],
+                "y": item["y"],
+                "width": item["width"],
+                "depth": item["depth"],
+                "height": item["height"],
+                "elevation": item["elevation"],
+                "angle": item["angle"],
+            })
+
+    def _point_to_segment_dist(px, py, x1, y1, x2, y2):
+        """Distance from point to line segment, plus projection t."""
+        dx = x2 - x1
+        dy = y2 - y1
+        l2 = dx * dx + dy * dy
+        if l2 < 0.0001:
+            return math.sqrt((px-x1)**2 + (py-y1)**2), 0.0
+        t = ((px - x1) * dx + (py - y1) * dy) / l2
+        t = max(0, min(1, t))
+        cx = x1 + t * dx
+        cy = y1 + t * dy
+        return math.sqrt((px-cx)**2 + (py-cy)**2), t
+
+    def _wall_face_with_holes(x0, z0, x1, z1, h,
+                              holes, vo_start):
+        """Generate a rectangular wall face with holes.
+        Face goes from (x0,0,z0) to (x1,h,z1).
+        holes: list of (t_start, t_end, y_bot, y_top)
+        in wall-local coords (t along wall, y vertical).
+        Returns (vertices, faces) where faces ref vo_start.
+        """
+        verts = []
+        faces = []
+        length = math.sqrt((x1-x0)**2 + (z1-z0)**2)
+        if length < 0.001:
+            return verts, faces
+        dx = (x1 - x0) / length
+        dz = (z1 - z0) / length
+
+        # Sort holes by t_start
+        holes = sorted(holes, key=lambda h: h[0])
+
+        # Clamp holes to wall bounds
+        clamped = []
+        for ts, te, yb, yt in holes:
+            ts = max(0, ts)
+            te = min(length, te)
+            yb = max(0, yb)
+            yt = min(h, yt)
+            if te > ts and yt > yb:
+                clamped.append((ts, te, yb, yt))
+        holes = clamped
+
+        # Build vertical strips along the wall
+        # Collect all t-boundaries
+        t_bounds = [0.0]
+        for ts, te, yb, yt in holes:
+            t_bounds.append(ts)
+            t_bounds.append(te)
+        t_bounds.append(length)
+        t_bounds = sorted(set(t_bounds))
+
+        def _add_quad(t_l, t_r, y_b, y_t):
+            """Add a quad from t_l..t_r, y_b..y_t."""
+            if t_r - t_l < 0.0001 or y_t - y_b < 0.0001:
+                return
+            idx = len(verts)
+            verts.append((
+                x0 + dx * t_l, y_b, z0 + dz * t_l
+            ))
+            verts.append((
+                x0 + dx * t_r, y_b, z0 + dz * t_r
+            ))
+            verts.append((
+                x0 + dx * t_r, y_t, z0 + dz * t_r
+            ))
+            verts.append((
+                x0 + dx * t_l, y_t, z0 + dz * t_l
+            ))
+            b = vo_start + idx + 1
+            faces.append((b, b+1, b+2, b+3))
+
+        for si in range(len(t_bounds) - 1):
+            tl = t_bounds[si]
+            tr = t_bounds[si + 1]
+            if tr - tl < 0.0001:
+                continue
+            # Find holes that overlap this strip
+            strip_holes = []
+            for ts, te, yb, yt in holes:
+                if ts <= tl + 0.001 and te >= tr - 0.001:
+                    strip_holes.append((yb, yt))
+            if not strip_holes:
+                _add_quad(tl, tr, 0, h)
+            else:
+                # Sort holes by bottom
+                strip_holes.sort(key=lambda s: s[0])
+                y_cur = 0
+                for yb, yt in strip_holes:
+                    if yb > y_cur + 0.001:
+                        _add_quad(tl, tr, y_cur, yb)
+                    y_cur = yt
+                if y_cur < h - 0.001:
+                    _add_quad(tl, tr, y_cur, h)
+
+        return verts, faces
 
     for w in walls:
         xs = w["xs"] / 100
@@ -605,50 +716,196 @@ def assemble_sh3d(zip_path, output_dir):
         length = math.sqrt(dx * dx + dy * dy)
         if length < 0.001:
             continue
-        nx = -dy / length * t / 2
-        ny = dx / length * t / 2
-        wv = [
-            (xs - nx, 0, ys - ny),
-            (xs + nx, 0, ys + ny),
-            (xe + nx, 0, ye + ny),
-            (xe - nx, 0, ye - ny),
-            (xs - nx, h, ys - ny),
-            (xs + nx, h, ys + ny),
-            (xe + nx, h, ye + ny),
-            (xe - nx, h, ye - ny),
-        ]
-        # Wall normals
-        wn = [
-            (-nx/abs(nx) if nx else 0, 0, -ny/abs(ny) if ny else 0),
-            (nx/abs(nx) if nx else 0, 0, ny/abs(ny) if ny else 0),
-            (0, 1, 0),
-            (0, -1, 0),
-        ]
+        ux = dx / length
+        uy = dy / length
+        nx = -uy * t / 2
+        ny = ux * t / 2
+
+        # Find openings on this wall
+        wall_holes = []
+        for op in openings:
+            ox = op["x"] / 100
+            oy = op["y"] / 100
+            dist, proj_t = _point_to_segment_dist(
+                ox, oy, xs, ys, xe, ye
+            )
+            if dist > t * 1.2:
+                continue
+            # Opening sits on this wall
+            ow = op["width"] / 100
+            oh = op["height"] / 100
+            oe = op["elevation"] / 100
+            # Position along wall in meters
+            pos_along = proj_t * length
+            half_w = ow / 2
+            wall_holes.append((
+                pos_along - half_w,
+                pos_along + half_w,
+                oe,
+                oe + oh,
+            ))
+
         out_lines.append(f"g Wall_{wi}\n")
         out_lines.append(f"usemtl {wall_mtl_name}\n")
-        for v in wv:
-            out_lines.append(
-                f"v {v[0]:.4f}"
-                f" {v[1]:.4f}"
-                f" {v[2]:.4f}\n"
+
+        if not wall_holes:
+            # Simple solid wall (no openings)
+            wv = [
+                (xs - nx, 0, ys - ny),
+                (xs + nx, 0, ys + ny),
+                (xe + nx, 0, ye + ny),
+                (xe - nx, 0, ye - ny),
+                (xs - nx, h, ys - ny),
+                (xs + nx, h, ys + ny),
+                (xe + nx, h, ye + ny),
+                (xe - nx, h, ye - ny),
+            ]
+            for v in wv:
+                out_lines.append(
+                    f"v {v[0]:.4f}"
+                    f" {v[1]:.4f}"
+                    f" {v[2]:.4f}\n"
+                )
+            b = vo + 1
+            wall_faces = [
+                (0, 1, 5, 4),
+                (2, 3, 7, 6),
+                (4, 5, 6, 7),
+                (0, 3, 2, 1),
+                (0, 4, 7, 3),
+                (1, 2, 6, 5),
+            ]
+            for face in wall_faces:
+                out_lines.append(
+                    f"f {b+face[0]}"
+                    f" {b+face[1]}"
+                    f" {b+face[2]}"
+                    f" {b+face[3]}\n"
+                )
+            vo += 8
+        else:
+            # Wall with openings - generate faces with holes
+            vc = 0
+            # Front face (negative normal side)
+            fv, ff = _wall_face_with_holes(
+                xs - nx, ys - ny,
+                xe - nx, ye - ny,
+                h, wall_holes, vo
             )
-        b = vo + 1
-        wall_faces = [
-            (0, 1, 5, 4),
-            (2, 3, 7, 6),
-            (4, 5, 6, 7),
-            (0, 3, 2, 1),
-            (0, 4, 7, 3),
-            (1, 2, 6, 5),
-        ]
-        for face in wall_faces:
-            out_lines.append(
-                f"f {b+face[0]}"
-                f" {b+face[1]}"
-                f" {b+face[2]}"
-                f" {b+face[3]}\n"
+            for v in fv:
+                out_lines.append(
+                    f"v {v[0]:.4f}"
+                    f" {v[1]:.4f}"
+                    f" {v[2]:.4f}\n"
+                )
+            for face in ff:
+                out_lines.append(
+                    f"f {face[0]}"
+                    f" {face[1]}"
+                    f" {face[2]}"
+                    f" {face[3]}\n"
+                )
+            vc += len(fv)
+
+            # Back face (positive normal side, reversed)
+            bv, bf = _wall_face_with_holes(
+                xs + nx, ys + ny,
+                xe + nx, ye + ny,
+                h, wall_holes, vo + vc
             )
-        vo += 8
+            for v in bv:
+                out_lines.append(
+                    f"v {v[0]:.4f}"
+                    f" {v[1]:.4f}"
+                    f" {v[2]:.4f}\n"
+                )
+            for face in bf:
+                # Reverse winding for back face
+                out_lines.append(
+                    f"f {face[0]}"
+                    f" {face[3]}"
+                    f" {face[2]}"
+                    f" {face[1]}\n"
+                )
+            vc += len(bv)
+
+            # Top face
+            tv = [
+                (xs - nx, h, ys - ny),
+                (xs + nx, h, ys + ny),
+                (xe + nx, h, ye + ny),
+                (xe - nx, h, ye - ny),
+            ]
+            for v in tv:
+                out_lines.append(
+                    f"v {v[0]:.4f}"
+                    f" {v[1]:.4f}"
+                    f" {v[2]:.4f}\n"
+                )
+            b = vo + vc + 1
+            out_lines.append(
+                f"f {b} {b+1} {b+2} {b+3}\n"
+            )
+            vc += 4
+
+            # Bottom face
+            bv2 = [
+                (xs - nx, 0, ys - ny),
+                (xe - nx, 0, ye - ny),
+                (xe + nx, 0, ye + ny),
+                (xs + nx, 0, ys + ny),
+            ]
+            for v in bv2:
+                out_lines.append(
+                    f"v {v[0]:.4f}"
+                    f" {v[1]:.4f}"
+                    f" {v[2]:.4f}\n"
+                )
+            b = vo + vc + 1
+            out_lines.append(
+                f"f {b} {b+1} {b+2} {b+3}\n"
+            )
+            vc += 4
+
+            # Left end cap
+            lv = [
+                (xs - nx, 0, ys - ny),
+                (xs + nx, 0, ys + ny),
+                (xs + nx, h, ys + ny),
+                (xs - nx, h, ys - ny),
+            ]
+            for v in lv:
+                out_lines.append(
+                    f"v {v[0]:.4f}"
+                    f" {v[1]:.4f}"
+                    f" {v[2]:.4f}\n"
+                )
+            b = vo + vc + 1
+            out_lines.append(
+                f"f {b} {b+1} {b+2} {b+3}\n"
+            )
+            vc += 4
+
+            # Right end cap
+            rv = [
+                (xe - nx, 0, ye - ny),
+                (xe - nx, h, ye - ny),
+                (xe + nx, h, ye + ny),
+                (xe + nx, 0, ye + ny),
+            ]
+            for v in rv:
+                out_lines.append(
+                    f"v {v[0]:.4f}"
+                    f" {v[1]:.4f}"
+                    f" {v[2]:.4f}\n"
+                )
+            b = vo + vc + 1
+            out_lines.append(
+                f"f {b} {b+1} {b+2} {b+3}\n"
+            )
+            vc += 4
+
+            vo += vc
         wi += 1
 
     _LOGGER.info(
