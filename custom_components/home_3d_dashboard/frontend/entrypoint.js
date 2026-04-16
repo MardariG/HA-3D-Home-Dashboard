@@ -283,7 +283,7 @@ class ThreeDHomeDashboard extends HTMLElement {
         if (child.isMesh) {
           if (!child.name) child.name = `mesh_${idx++}`;
           this._meshList.push(child);
-          this._originalMaterials.set(child.uuid, child.material.clone ? child.material.clone() : child.material);
+          this._originalMaterials.set(child.uuid, this._cloneMat(child.material));
         }
       });
       this._applyModelRotation();
@@ -500,17 +500,26 @@ class ThreeDHomeDashboard extends HTMLElement {
     }
   }
 
+  _cloneMat(mat) {
+    if (!mat) return mat;
+    if (Array.isArray(mat)) return mat.map((m) => m.clone ? m.clone() : m);
+    return mat.clone ? mat.clone() : mat;
+  }
+
+  _applyToMat(mat, fn) {
+    if (Array.isArray(mat)) { mat.forEach(fn); } else if (mat) { fn(mat); }
+  }
+
   _highlightMesh(mesh, color, intensity) {
     if (!mesh.material) return;
-    const mat = mesh.material.clone();
-    mat.emissive = new this._THREE.Color(color);
-    mat.emissiveIntensity = intensity;
+    const mat = this._cloneMat(mesh.material);
+    this._applyToMat(mat, (m) => { m.emissive = new this._THREE.Color(color); m.emissiveIntensity = intensity; });
     mesh.material = mat;
   }
 
   _restoreMaterial(mesh) {
     const orig = this._originalMaterials.get(mesh.uuid);
-    if (orig) mesh.material = orig.clone ? orig.clone() : orig;
+    if (orig) mesh.material = this._cloneMat(orig);
   }
 
   _toggleEditMode() {
@@ -636,12 +645,11 @@ class ThreeDHomeDashboard extends HTMLElement {
     const bri = (state.attributes?.brightness || 255) / 255;
     this._restoreMaterial(mesh);
     if (isOn) {
-      const mat = mesh.material.clone();
+      const mat = this._cloneMat(mesh.material);
       let lc = new THREE.Color(0xffdd88);
       if (state.attributes?.rgb_color) { const [r,g,b] = state.attributes.rgb_color; lc = new THREE.Color(r/255,g/255,b/255); }
       else if (state.attributes?.color_temp_kelvin) lc = this._kelvinToColor(state.attributes.color_temp_kelvin);
-      mat.emissive = lc;
-      mat.emissiveIntensity = 0.2 + bri * 0.6;
+      this._applyToMat(mat, (m) => { m.emissive = lc; m.emissiveIntensity = 0.2 + bri * 0.6; });
       mesh.material = mat;
       const box = new THREE.Box3().setFromObject(mesh);
       const center = box.getCenter(new THREE.Vector3());
@@ -650,11 +658,8 @@ class ThreeDHomeDashboard extends HTMLElement {
       this._scene.add(pl);
       this._lightHelpers.push(pl);
     } else {
-      const mat = mesh.material.clone();
-      mat.emissive = new THREE.Color(0x000000);
-      mat.emissiveIntensity = 0;
-      const c = mat.color || new THREE.Color(0x888888);
-      mat.color = c.multiplyScalar(0.7);
+      const mat = this._cloneMat(mesh.material);
+      this._applyToMat(mat, (m) => { m.emissive = new THREE.Color(0x000000); m.emissiveIntensity = 0; });
       mesh.material = mat;
     }
   }
@@ -662,9 +667,9 @@ class ThreeDHomeDashboard extends HTMLElement {
   _applySwitchState(mesh, state) {
     const THREE = this._THREE;
     this._restoreMaterial(mesh);
-    const mat = mesh.material.clone();
-    if (state.state === "on") { mat.emissive = new THREE.Color(0x4caf50); mat.emissiveIntensity = 0.2; }
-    else { mat.emissive = new THREE.Color(0x000000); const c = mat.color || new THREE.Color(0x888888); mat.color = c.multiplyScalar(0.7); }
+    const mat = this._cloneMat(mesh.material);
+    if (state.state === "on") { this._applyToMat(mat, (m) => { m.emissive = new THREE.Color(0x4caf50); m.emissiveIntensity = 0.2; }); }
+    else { this._applyToMat(mat, (m) => { m.emissive = new THREE.Color(0x000000); }); }
     mesh.material = mat;
   }
 
@@ -673,15 +678,14 @@ class ThreeDHomeDashboard extends HTMLElement {
     this._restoreMaterial(mesh);
     const val = parseFloat(state.state);
     if (isNaN(val)) return;
-    const mat = mesh.material.clone();
+    const mat = this._cloneMat(mesh.material);
     const unit = state.attributes?.unit_of_measurement || "";
     let nv = 0.5;
     if (unit === "\u00b0C" || unit === "\u00b0F") { const tc = unit === "\u00b0F" ? (val-32)*5/9 : val; nv = Math.max(0, Math.min(1, (tc-15)/15)); }
     else if (unit === "%") nv = Math.max(0, Math.min(1, val/100));
     const color = new THREE.Color();
     color.setHSL(0.6 - nv * 0.6, 0.7, 0.5);
-    mat.emissive = color;
-    mat.emissiveIntensity = 0.15;
+    this._applyToMat(mat, (m) => { m.emissive = color; m.emissiveIntensity = 0.15; });
     mesh.material = mat;
   }
 
