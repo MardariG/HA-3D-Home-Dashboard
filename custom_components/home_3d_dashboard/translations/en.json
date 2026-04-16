@@ -3,11 +3,19 @@
     "step": {
       "user": {
         "title": "3D Home Dashboard",
-        "description": "This will add an interactive 3D dashboard to your sidebar. Click Submit to install."
+        "description": "This will add an interactive 3D dashboard to your sidebar where you can upload and view your 3D home model.\\n\\nClick **Submit** to install."
       }
     },
     "abort": {
       "already_configured": "3D Home Dashboard is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "3D Home Dashboard Options",
+        "description": "{info}"
+      }
     }
   }
 }

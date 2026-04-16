@@ -7,7 +7,14 @@ import voluptuous as vol
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.components import websocket_api
-from homeassistant.components.http import HomeAssistantView
+from homeassistant.components.http import (
+    HomeAssistantView,
+    StaticPathConfig,
+)
+from homeassistant.components.frontend import (
+    async_register_built_in_panel,
+    async_remove_panel,
+)
 from homeassistant.helpers.typing import ConfigType
 from aiohttp import web
 
@@ -23,7 +30,7 @@ WS_INFO = DOMAIN + "/get_model_info"
 WS_DEL = DOMAIN + "/delete_model"
 
 
-def _setup_integration(hass):
+async def _setup_integration(hass):
     """Shared setup for YAML and config entry."""
     default = {
         "mappings": {},
@@ -38,7 +45,9 @@ def _setup_integration(hass):
     mp = hass.config.path(MODELS_DIR)
     os.makedirs(mp, exist_ok=True)
 
-    sp = hass.config.path(".storage/" + STORAGE_KEY)
+    sp = hass.config.path(
+        ".storage/" + STORAGE_KEY
+    )
     if os.path.exists(sp):
         try:
             with open(sp, "r") as fp:
@@ -55,8 +64,7 @@ def _setup_integration(hass):
     fdir = os.path.dirname(__file__)
     fpath = os.path.join(fdir, "frontend")
     url_pfx = "/" + DOMAIN + "/frontend"
-    from homeassistant.components.http import StaticPathConfig
-    hass.http.async_register_static_paths(
+    await hass.http.async_register_static_paths(
         [StaticPathConfig(url_pfx, fpath, False)]
     )
     hass.http.register_view(ModelUploadView(hass))
@@ -74,23 +82,20 @@ def _setup_integration(hass):
         hass, ws_delete_model
     )
 
-    js = "/" + DOMAIN + "/frontend/entrypoint.js"
+    js_url = "/" + DOMAIN + "/frontend/entrypoint.js"
     pc = {
         "_panel_custom": {
             "name": "home-3d-dashboard-panel",
             "embed_iframe": False,
             "trust_external": False,
-            "js_url": js,
+            "js_url": js_url,
         }
     }
-    from homeassistant.components.frontend import (
-        async_register_built_in_panel,
-    )
     async_register_built_in_panel(
         hass,
         component_name="custom",
         sidebar_title="3D Dashboard",
-        sidebar_icon="mdi:home-3d",
+        sidebar_icon="mdi:home-floor-3",
         frontend_url_path="home-3d-dashboard",
         config=pc,
         require_admin=False,
@@ -106,21 +111,18 @@ CONFIG_SCHEMA = vol.Schema(
 async def async_setup(hass, config):
     """Set up via configuration.yaml."""
     if DOMAIN in config:
-        _setup_integration(hass)
+        await _setup_integration(hass)
     return True
 
 
 async def async_setup_entry(hass, entry):
     """Set up via UI config flow."""
-    _setup_integration(hass)
+    await _setup_integration(hass)
     return True
 
 
 async def async_unload_entry(hass, entry):
     """Unload a config entry."""
-    from homeassistant.components.frontend import (
-        async_remove_panel,
-    )
     async_remove_panel(hass, "home-3d-dashboard")
     hass.data[DOMAIN]["_setup_done"] = False
     return True
