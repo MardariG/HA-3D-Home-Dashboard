@@ -451,30 +451,9 @@ class ThreeDHomeDashboard extends HTMLElement {
 
   _updateGroundColor(hex) {
     this._settings.groundColor = hex;
-    if (!this._grassCanvas || !this._grassTexture) return;
-    const c = this._grassCanvas;
-    const ctx = c.getContext("2d");
-    ctx.fillStyle = hex;
-    ctx.fillRect(0, 0, 512, 512);
-    for (let i = 0; i < 20000; i++) {
-      const x = Math.random() * 512;
-      const y = Math.random() * 512;
-      const br = 0.85 + Math.random() * 0.3;
-      const r = parseInt(hex.slice(1, 3), 16) * br;
-      const g = parseInt(hex.slice(3, 5), 16) * br;
-      const b = parseInt(hex.slice(5, 7), 16) * br;
-      ctx.fillStyle = `rgb(${Math.min(255,r|0)},${Math.min(255,g|0)},${Math.min(255,b|0)})`;
-      ctx.fillRect(x, y, 1 + Math.random() * 2, 1 + Math.random() * 3);
+    if (this._groundPlane) {
+      this._groundPlane.material.color.set(hex);
     }
-    for (let i = 0; i < 200; i++) {
-      const x = Math.random() * 512;
-      const y = Math.random() * 512;
-      ctx.fillStyle = "rgba(0,0,0,0.06)";
-      ctx.beginPath();
-      ctx.ellipse(x, y, 8 + Math.random() * 20, 6 + Math.random() * 15, Math.random() * Math.PI, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    this._grassTexture.needsUpdate = true;
   }
 
   _buildSkyEnvironment(THREE) {
@@ -527,42 +506,10 @@ class ThreeDHomeDashboard extends HTMLElement {
     // Remove flat background color since we have the dome
     this._scene.background = null;
 
-    // --- Ground plane with procedural grass texture ---
+    // --- Ground plane (flat color) ---
     const groundGeo = new THREE.CircleGeometry(skyRadius * 0.8, 64);
-    const grassCanvas = document.createElement("canvas");
-    grassCanvas.width = 512;
-    grassCanvas.height = 512;
-    const gCtx = grassCanvas.getContext("2d");
-    // Base color
-    const baseColor = this._settings.groundColor || "#4a7c3f";
-    gCtx.fillStyle = baseColor;
-    gCtx.fillRect(0, 0, 512, 512);
-    // Noise pattern for realism
-    for (let i = 0; i < 20000; i++) {
-      const x = Math.random() * 512;
-      const y = Math.random() * 512;
-      const brightness = 0.85 + Math.random() * 0.3;
-      const r = parseInt(baseColor.slice(1, 3), 16) * brightness;
-      const g = parseInt(baseColor.slice(3, 5), 16) * brightness;
-      const b = parseInt(baseColor.slice(5, 7), 16) * brightness;
-      gCtx.fillStyle = `rgb(${Math.min(255,r|0)},${Math.min(255,g|0)},${Math.min(255,b|0)})`;
-      gCtx.fillRect(x, y, 1 + Math.random() * 2, 1 + Math.random() * 3);
-    }
-    // Subtle darker patches
-    for (let i = 0; i < 200; i++) {
-      const x = Math.random() * 512;
-      const y = Math.random() * 512;
-      gCtx.fillStyle = "rgba(0,0,0,0.06)";
-      gCtx.beginPath();
-      gCtx.ellipse(x, y, 8 + Math.random() * 20, 6 + Math.random() * 15, Math.random() * Math.PI, 0, Math.PI * 2);
-      gCtx.fill();
-    }
-    const grassTex = new THREE.CanvasTexture(grassCanvas);
-    grassTex.wrapS = THREE.RepeatWrapping;
-    grassTex.wrapT = THREE.RepeatWrapping;
-    grassTex.repeat.set(40, 40);
     const groundMat = new THREE.MeshStandardMaterial({
-      map: grassTex,
+      color: this._settings.groundColor || "#4a7c3f",
       roughness: 0.92,
       metalness: 0.0,
     });
@@ -571,8 +518,6 @@ class ThreeDHomeDashboard extends HTMLElement {
     this._groundPlane.position.y = -0.05;
     this._groundPlane.receiveShadow = true;
     this._scene.add(this._groundPlane);
-    this._grassCanvas = grassCanvas;
-    this._grassTexture = grassTex;
 
     // --- Sun ---
     const sunGeo = new THREE.SphereGeometry(12, 16, 16);
