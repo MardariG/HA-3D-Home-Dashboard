@@ -40,15 +40,17 @@ Use the **Quick Install** button above, or:
 
 ### Manual
 
-1. Copy the `custom_components/3d_home_dashboard` folder to your `config/custom_components/` directory
+1. Copy the `custom_components/home_3d_dashboard` folder to your `config/custom_components/` directory
 2. Restart Home Assistant
 
 ## Configuration
 
-Add the following to your `configuration.yaml`:
+Go to **Settings → Integrations → Add Integration** → search **3D Home Dashboard** → click **Submit**. The sidebar item appears automatically.
+
+Alternatively, add the following to your `configuration.yaml`:
 
 ```yaml
-3d_home_dashboard:
+home_3d_dashboard:
 ```
 
 Restart Home Assistant. A new **3D Dashboard** item will appear in your sidebar.

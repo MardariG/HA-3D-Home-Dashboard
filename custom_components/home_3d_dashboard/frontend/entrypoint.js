@@ -527,7 +527,7 @@ class ThreeDHomeDashboard extends HTMLElement {
 
     try {
       const result = await this._hass.callWS({
-        type: "3d_home_dashboard/get_model_info",
+        type: "home_3d_dashboard/get_model_info",
       });
 
       if (result && result.filename) {
@@ -547,7 +547,7 @@ class ThreeDHomeDashboard extends HTMLElement {
     formData.append("model", file);
 
     try {
-      const resp = await fetch(`/api/3d_home_dashboard/upload`, {
+      const resp = await fetch(`/api/home_3d_dashboard/upload`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${this._hass.auth.data.access_token}`,
@@ -592,7 +592,7 @@ class ThreeDHomeDashboard extends HTMLElement {
 
     try {
       const loader = new this._GLTFLoader();
-      const url = `/api/3d_home_dashboard/model/${encodeURIComponent(filename)}`;
+      const url = `/api/home_3d_dashboard/model/${encodeURIComponent(filename)}`;
 
       const gltf = await new Promise((resolve, reject) => {
         loader.load(
@@ -1056,7 +1056,7 @@ class ThreeDHomeDashboard extends HTMLElement {
   async _loadMappings() {
     try {
       const result = await this._hass.callWS({
-        type: "3d_home_dashboard/get_mappings",
+        type: "home_3d_dashboard/get_mappings",
       });
       this._mappings = result || {};
       this._updateEntityStates();
@@ -1069,7 +1069,7 @@ class ThreeDHomeDashboard extends HTMLElement {
   async _saveMappingsToServer() {
     try {
       await this._hass.callWS({
-        type: "3d_home_dashboard/save_mappings",
+        type: "home_3d_dashboard/save_mappings",
         mappings: this._mappings,
       });
     } catch (err) {
@@ -1268,7 +1268,7 @@ class ThreeDHomeDashboard extends HTMLElement {
 
     actions.querySelector("#delete-btn").addEventListener("click", async () => {
       if (confirm("Delete the current 3D model and all mappings?")) {
-        await this._hass.callWS({ type: "3d_home_dashboard/delete_model" });
+        await this._hass.callWS({ type: "home_3d_dashboard/delete_model" });
         if (this._model) {
           this._scene.remove(this._model);
           this._model = null;
@@ -1328,4 +1328,4 @@ class ThreeDHomeDashboard extends HTMLElement {
   }
 }
 
-customElements.define("3d-home-dashboard-panel", ThreeDHomeDashboard);
+customElements.define("home-3d-dashboard-panel", ThreeDHomeDashboard);

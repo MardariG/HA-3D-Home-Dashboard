@@ -1,7 +1,7 @@
 {
-  "domain": "3d_home_dashboard",
+  "domain": "home_3d_dashboard",
   "name": "3D Home Dashboard",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "documentation": "https://github.com/MardariG/HA-3D-Home-Dashboard",
   "issue_tracker": "https://github.com/MardariG/HA-3D-Home-Dashboard/issues",
   "dependencies": [

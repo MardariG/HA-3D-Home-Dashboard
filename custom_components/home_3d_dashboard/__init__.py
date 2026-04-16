@@ -1,4 +1,4 @@
-"""3D Home Dashboard - Interactive 3D model dashboard for Home Assistant."""
+"""3D Home Dashboard - HA integration."""
 import logging
 import os
 import json
@@ -13,9 +13,14 @@ from aiohttp import web
 
 _LOGGER = logging.getLogger(__name__)
 
-DOMAIN = "3d_home_dashboard"
-STORAGE_KEY = "3d_home_dashboard_mappings"
+DOMAIN = "home_3d_dashboard"
+STORAGE_KEY = "home_3d_dashboard_mappings"
 MODELS_DIR = "3d_models"
+
+WS_GET = DOMAIN + "/get_mappings"
+WS_SAVE = DOMAIN + "/save_mappings"
+WS_INFO = DOMAIN + "/get_model_info"
+WS_DEL = DOMAIN + "/delete_model"
 
 
 def _setup_integration(hass):
@@ -38,18 +43,20 @@ def _setup_integration(hass):
         try:
             with open(sp, "r") as fp:
                 data = json.load(fp)
-                m = data.get("mappings", {})
-                f = data.get("model_filename")
-                hass.data[DOMAIN]["mappings"] = m
-                hass.data[DOMAIN]["model_filename"] = f
+                hass.data[DOMAIN]["mappings"] = (
+                    data.get("mappings", {})
+                )
+                hass.data[DOMAIN]["model_filename"] = (
+                    data.get("model_filename")
+                )
         except Exception:
             _LOGGER.exception("Load failed")
 
     fdir = os.path.dirname(__file__)
     fpath = os.path.join(fdir, "frontend")
-    url_prefix = "/" + DOMAIN + "/frontend"
+    url_pfx = "/" + DOMAIN + "/frontend"
     hass.http.register_static_path(
-        url_prefix, fpath, cache_headers=False,
+        url_pfx, fpath, cache_headers=False,
     )
     hass.http.register_view(ModelUploadView(hass))
     hass.http.register_view(ModelServeView(hass))
@@ -69,7 +76,7 @@ def _setup_integration(hass):
     js = "/" + DOMAIN + "/frontend/entrypoint.js"
     pc = {
         "_panel_custom": {
-            "name": "3d-home-dashboard-panel",
+            "name": "home-3d-dashboard-panel",
             "embed_iframe": False,
             "trust_external": False,
             "js_url": js,
@@ -79,7 +86,7 @@ def _setup_integration(hass):
         component_name="custom",
         sidebar_title="3D Dashboard",
         sidebar_icon="mdi:home-3d",
-        frontend_url_path="3d-home-dashboard",
+        frontend_url_path="home-3d-dashboard",
         config=pc,
         require_admin=False,
     )
@@ -106,7 +113,7 @@ async def async_setup_entry(hass, entry):
 
 async def async_unload_entry(hass, entry):
     """Unload a config entry."""
-    panel_id = "3d-home-dashboard"
+    panel_id = "home-3d-dashboard"
     hass.components.frontend.async_remove_panel(
         panel_id
     )
@@ -119,7 +126,8 @@ def _save_data(hass):
     sp = hass.config.path(
         ".storage/" + STORAGE_KEY
     )
-    os.makedirs(os.path.dirname(sp), exist_ok=True)
+    d = os.path.dirname(sp)
+    os.makedirs(d, exist_ok=True)
     payload = {
         "mappings": hass.data[DOMAIN]["mappings"],
         "model_filename": (
@@ -133,8 +141,8 @@ def _save_data(hass):
 class ModelUploadView(HomeAssistantView):
     """Handle 3D model file uploads."""
 
-    url = "/api/3d_home_dashboard/upload"
-    name = "api:3d_home_dashboard:upload"
+    url = "/api/home_3d_dashboard/upload"
+    name = "api:home_3d_dashboard:upload"
     requires_auth = True
 
     def __init__(self, hass):
@@ -155,9 +163,7 @@ class ModelUploadView(HomeAssistantView):
                     err, status=400
                 )
             fname = field.filename
-            ok_ext = (
-                ".glb", ".gltf"
-            )
+            ok_ext = (".glb", ".gltf")
             if not fname.lower().endswith(ok_ext):
                 err = {"error": "GLB/GLTF only"}
                 return web.json_response(
@@ -198,8 +204,8 @@ class ModelUploadView(HomeAssistantView):
 class ModelServeView(HomeAssistantView):
     """Serve the uploaded 3D model file."""
 
-    url = "/api/3d_home_dashboard/model/{filename}"
-    name = "api:3d_home_dashboard:model"
+    url = "/api/home_3d_dashboard/model/{filename}"
+    name = "api:home_3d_dashboard:model"
     requires_auth = True
 
     def __init__(self, hass):
@@ -224,12 +230,6 @@ class ModelServeView(HomeAssistantView):
         )
 
 
-WS_GET = DOMAIN + "/get_mappings"
-WS_SAVE = DOMAIN + "/save_mappings"
-WS_INFO = DOMAIN + "/get_model_info"
-WS_DEL = DOMAIN + "/delete_model"
-
-
 @websocket_api.websocket_command(
     {vol.Required("type"): WS_GET}
 )
@@ -247,7 +247,8 @@ async def ws_get_mappings(hass, conn, msg):
 @websocket_api.async_response
 async def ws_save_mappings(hass, conn, msg):
     """Save mappings."""
-    hass.data[DOMAIN]["mappings"] = msg["mappings"]
+    m = msg["mappings"]
+    hass.data[DOMAIN]["mappings"] = m
     await hass.async_add_executor_job(
         _save_data, hass
     )

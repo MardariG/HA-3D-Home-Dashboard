@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "3D Home Dashboard",
+        "description": "This will add an interactive 3D dashboard to your sidebar. Click Submit to install."
+      }
+    },
+    "abort": {
+      "already_configured": "3D Home Dashboard is already configured."
+    }
+  }
+}
