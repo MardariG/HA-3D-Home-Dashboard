@@ -230,11 +230,20 @@ class ThreeDHomeDashboard extends HTMLElement {
     const formData = new FormData();
     formData.append("model", file);
     try {
+      const token = this._hass?.auth?.data?.access_token || "";
+      const headers = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
       const resp = await fetch("/api/home_3d_dashboard/upload", {
         method: "POST",
-        headers: { Authorization: `Bearer ${this._hass.auth.data.access_token}` },
+        headers,
+        credentials: "same-origin",
         body: formData,
       });
+      if (!resp.ok) {
+        alert("Upload failed: HTTP " + resp.status + ". Please refresh and try again.");
+        this._hideLoading();
+        return;
+      }
       const data = await resp.json();
       if (data.success) {
         this._modelFilename = data.filename;
@@ -341,15 +350,12 @@ class ThreeDHomeDashboard extends HTMLElement {
     this._controls.minDistance = 0.5;
     this._controls.maxDistance = 200;
 
-    // Ambient light (soft fill)
     this._ambientLight = new THREE.AmbientLight(0xffffff, this._settings.ambientIntensity);
     this._scene.add(this._ambientLight);
 
-    // Sky light (hemisphere: sky blue from above, ground warmth from below)
     this._skyLight = new THREE.HemisphereLight(0x87CEEB, 0x444422, this._settings.skyLightIntensity);
     this._scene.add(this._skyLight);
 
-    // Sun / directional light
     this._sunLight = new THREE.DirectionalLight(0xffffff, this._settings.sunIntensity);
     this._sunLight.position.set(15, 30, 15);
     this._sunLight.castShadow = true;
@@ -363,12 +369,10 @@ class ThreeDHomeDashboard extends HTMLElement {
     this._sunLight.shadow.camera.bottom = -30;
     this._scene.add(this._sunLight);
 
-    // Secondary fill from opposite side
     const fillLight = new THREE.DirectionalLight(0xffeedd, 0.3);
     fillLight.position.set(-10, 8, -10);
     this._scene.add(fillLight);
 
-    // Grid helper
     this._gridHelper = new THREE.GridHelper(50, 50, 0x333355, 0x222244);
     this._gridHelper.material.opacity = 0.3;
     this._gridHelper.material.transparent = true;
@@ -398,7 +402,6 @@ class ThreeDHomeDashboard extends HTMLElement {
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
     const d = Math.max(size.x, size.y, size.z) * 1.5;
-    // Position camera at a nice isometric angle above
     this._camera.position.set(center.x + d * 0.7, center.y + d * 0.9, center.z + d * 0.7);
     this._controls.target.copy(center);
     this._controls.update();
@@ -668,8 +671,7 @@ class ThreeDHomeDashboard extends HTMLElement {
 
   _kelvinToColor(kelvin) {
     const t = kelvin / 100;
-    let r, g, b;
-    if (t <= 66) { r = 255; g = Math.max(0, Math.min(255, 99.47*Math.log(t)-161.12)); b = t <= 19 ? 0 : Math.max(0, Math.min(255, 138.52*Math.log(t-10)-305.04)); }
+    let r, g, b; if (t <= 66) { r = 255; g = Math.max(0, Math.min(255, 99.47*Math.log(t)-161.12)); b = t <= 19 ? 0 : Math.max(0, Math.min(255, 138.52*Math.log(t-10)-305.04)); }
     else { r = Math.max(0, Math.min(255, 329.7*Math.pow(t-60,-0.133))); g = Math.max(0, Math.min(255, 288.12*Math.pow(t-60,-0.0755))); b = 255; }
     return new this._THREE.Color(r/255, g/255, b/255);
   }
@@ -751,7 +753,6 @@ class ThreeDHomeDashboard extends HTMLElement {
         </div>
       </div>`;
 
-    // Bind lighting sliders
     const bindSlider = (id, key, applyFn) => {
       const el = sp.querySelector(`#${id}`);
       if (el) el.addEventListener("input", (e) => {
@@ -766,12 +767,10 @@ class ThreeDHomeDashboard extends HTMLElement {
     bindSlider("s-sun", "sunIntensity", () => { if (this._sunLight) this._sunLight.intensity = s.sunIntensity; });
     bindSlider("s-exposure", "exposure", () => { if (this._renderer) this._renderer.toneMappingExposure = s.exposure; });
 
-    // Rotation sliders
     bindSlider("s-rx", "rotateX", () => this._applyModelRotation());
     bindSlider("s-ry", "rotateY", () => this._applyModelRotation());
     bindSlider("s-rz", "rotateZ", () => this._applyModelRotation());
 
-    // Reset rotation
     const resetBtn = sp.querySelector("#s-reset-rot");
     if (resetBtn) resetBtn.addEventListener("click", () => {
       s.rotateX = 0; s.rotateY = 0; s.rotateZ = 0;
@@ -779,25 +778,21 @@ class ThreeDHomeDashboard extends HTMLElement {
       this._renderSettings();
     });
 
-    // Re-center camera
     const recenterBtn = sp.querySelector("#s-recenter");
     if (recenterBtn) recenterBtn.addEventListener("click", () => this._fitCameraToModel());
 
-    // Background color
     const bgInput = sp.querySelector("#s-bg");
     if (bgInput) bgInput.addEventListener("input", (e) => {
       s.bgColor = e.target.value;
       if (this._scene) this._scene.background = new this._THREE.Color(s.bgColor);
     });
 
-    // Grid toggle
     const gridCb = sp.querySelector("#s-grid");
     if (gridCb) gridCb.addEventListener("change", (e) => {
       s.showGrid = e.target.checked;
       if (this._gridHelper) this._gridHelper.visible = s.showGrid;
     });
 
-    // Wireframe toggle
     const wireCb = sp.querySelector("#s-wire");
     if (wireCb) wireCb.addEventListener("change", (e) => {
       s.showWireframe = e.target.checked;
