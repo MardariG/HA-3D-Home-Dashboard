@@ -2,10 +2,10 @@
  * 3D Home Dashboard - Home Assistant Custom Panel
  *
  * Interactive 3D model viewer with entity mapping for lights, switches, and sensors.
- * Uses Three.js for rendering via CDN (importmap).
+ * Uses Three.js for rendering via esm.sh CDN.
  */
 
-const THREE_CDN = "https://cdn.jsdelivr.net/npm/three@0.162.0";
+const THREE_CDN = "https://esm.sh/three@0.162.0";
 
 class ThreeDHomeDashboard extends HTMLElement {
   constructor() {
@@ -172,10 +172,10 @@ class ThreeDHomeDashboard extends HTMLElement {
     this._showLoading("Loading 3D engine...");
     try {
       const [threeModule, objModule, mtlModule, orbitModule] = await Promise.all([
-        import(`${THREE_CDN}/build/three.module.js`),
-        import(`${THREE_CDN}/examples/jsm/loaders/OBJLoader.js`),
-        import(`${THREE_CDN}/examples/jsm/loaders/MTLLoader.js`),
-        import(`${THREE_CDN}/examples/jsm/controls/OrbitControls.js`),
+        import(THREE_CDN),
+        import(`${THREE_CDN}/examples/jsm/loaders/OBJLoader`),
+        import(`${THREE_CDN}/examples/jsm/loaders/MTLLoader`),
+        import(`${THREE_CDN}/examples/jsm/controls/OrbitControls`),
       ]);
       this._THREE = threeModule;
       this._OBJLoader = objModule.OBJLoader;
