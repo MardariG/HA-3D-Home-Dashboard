@@ -1,10 +1,7 @@
 /**
  * 3D Home Dashboard - Home Assistant Custom Panel
- *
- * Interactive 3D model viewer with entity mapping for lights, switches, and sensors.
- * Uses Three.js for rendering via esm.sh CDN.
+ * v1.5.1 - SH3D only, improved rendering & settings
  */
-
 const THREE_CDN = "https://esm.sh/three@0.162.0";
 
 class ThreeDHomeDashboard extends HTMLElement {
@@ -18,7 +15,6 @@ class ThreeDHomeDashboard extends HTMLElement {
     this._renderer = null;
     this._controls = null;
     this._model = null;
-    this._mixer = null;
     this._clock = null;
     this._raycaster = null;
     this._mouse = null;
@@ -39,18 +35,31 @@ class ThreeDHomeDashboard extends HTMLElement {
     this._modelType = null;
     this._loaded = false;
     this._wsSubscription = null;
+    this._settingsOpen = false;
+    this._settings = {
+      ambientIntensity: 0.6,
+      skyLightIntensity: 0.8,
+      sunIntensity: 0.7,
+      exposure: 1.0,
+      rotateX: 0,
+      rotateY: 0,
+      rotateZ: 0,
+      bgColor: "#1a1a2e",
+      showGrid: true,
+      showWireframe: false,
+    };
+    this._ambientLight = null;
+    this._skyLight = null;
+    this._sunLight = null;
+    this._gridHelper = null;
   }
 
   set hass(hass) {
     this._hass = hass;
-    if (this._loaded) {
-      this._updateEntityStates();
-    }
+    if (this._loaded) this._updateEntityStates();
   }
 
-  set panel(panel) {
-    this._panel = panel;
-  }
+  set panel(panel) { this._panel = panel; }
 
   connectedCallback() {
     this._render();
@@ -128,10 +137,21 @@ class ThreeDHomeDashboard extends HTMLElement {
         .hover-tooltip .tt-name { font-weight:600;margin-bottom:2px; }
         .hover-tooltip .tt-entity { color:var(--ts);font-size:11px; }
         .hover-tooltip .tt-state { font-size:11px;margin-top:2px; }
+        .settings-panel { position:absolute;top:56px;right:0;width:320px;background:var(--cb);border-left:1px solid var(--bc);border-bottom:1px solid var(--bc);border-radius:0 0 0 12px;z-index:25;padding:16px;overflow-y:auto;max-height:calc(100vh - 80px);animation:fadeIn 0.2s; }
+        .settings-panel h3 { font-size:15px;font-weight:600;margin-bottom:16px; }
+        .settings-group { margin-bottom:16px; }
+        .settings-group h4 { font-size:12px;color:var(--ts);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px; }
+        .setting-row { display:flex;align-items:center;justify-content:space-between;margin-bottom:8px; }
+        .setting-row label { font-size:13px;flex-shrink:0;margin-right:12px; }
+        .setting-row input[type="range"] { flex:1;accent-color:var(--pc); }
+        .setting-row input[type="color"] { width:40px;height:28px;border:1px solid var(--bc);border-radius:4px;background:var(--bg);cursor:pointer; }
+        .setting-row input[type="checkbox"] { accent-color:var(--pc); }
+        .setting-value { font-size:11px;color:var(--ts);min-width:36px;text-align:right; }
+        .setting-row .btn-sm { margin-left:8px; }
         .side-body::-webkit-scrollbar { width:6px; }
         .side-body::-webkit-scrollbar-track { background:transparent; }
         .side-body::-webkit-scrollbar-thumb { background:var(--bc);border-radius:3px; }
-        @media(max-width:768px) { .side-panel{width:280px;} .topbar-title{font-size:15px;} }
+        @media(max-width:768px) { .side-panel{width:280px;} .topbar-title{font-size:15px;} .settings-panel{width:280px;} }
       </style>
       <div class="container">
         <div class="topbar">
@@ -155,6 +175,7 @@ class ThreeDHomeDashboard extends HTMLElement {
             <div class="loading-overlay" id="loading" style="display:none"><div class="spinner"></div><div class="loading-text" id="loading-text">Loading...</div></div>
             <div class="hud" id="hud" style="display:none"></div>
             <div class="hover-tooltip" id="tooltip" style="display:none"></div>
+            <div class="settings-panel" id="settings-panel" style="display:none"></div>
           </div>
           <div class="side-panel" id="side-panel" style="display:none"></div>
         </div>
@@ -248,6 +269,7 @@ class ThreeDHomeDashboard extends HTMLElement {
           this._originalMaterials.set(child.uuid, child.material.clone ? child.material.clone() : child.material);
         }
       });
+      this._applyModelRotation();
       this._fitCameraToModel();
       this.shadowRoot.getElementById("upload-overlay").style.display = "none";
       this._hideLoading();
@@ -259,26 +281,33 @@ class ThreeDHomeDashboard extends HTMLElement {
 
   async _loadOBJ(objUrl, basePath) {
     const THREE = this._THREE;
-    const token = this._hass.auth.data.access_token;
     const mtlUrl = objUrl.replace(/\.obj$/i, ".mtl");
     let materials = null;
     try {
       const mtlLoader = new this._MTLLoader();
-      mtlLoader.setRequestHeader({ Authorization: `Bearer ${token}` });
       const mtlDir = mtlUrl.substring(0, mtlUrl.lastIndexOf("/") + 1);
       mtlLoader.setResourcePath(mtlDir);
       materials = await new Promise((res) => { mtlLoader.load(mtlUrl, res, undefined, () => res(null)); });
       if (materials) materials.preload();
     } catch (e) { materials = null; }
     const objLoader = new this._OBJLoader();
-    objLoader.setRequestHeader({ Authorization: `Bearer ${token}` });
     if (materials) objLoader.setMaterials(materials);
     const obj = await new Promise((resolve, reject) => {
       objLoader.load(objUrl, resolve, (p) => { if (p.total > 0) this.shadowRoot.getElementById("loading-text").textContent = `Loading... ${Math.round(p.loaded/p.total*100)}%`; }, reject);
     });
     if (!materials) {
-      const dm = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.7, metalness: 0.1 });
-      obj.traverse((c) => { if (c.isMesh) c.material = dm.clone(); });
+      obj.traverse((c) => {
+        if (c.isMesh) {
+          c.material = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.7, metalness: 0.1, side: THREE.DoubleSide });
+        }
+      });
+    } else {
+      obj.traverse((c) => {
+        if (c.isMesh && c.material) {
+          if (Array.isArray(c.material)) { c.material.forEach((m) => { m.side = THREE.DoubleSide; }); }
+          else { c.material.side = THREE.DoubleSide; }
+        }
+      });
     }
     return obj;
   }
@@ -286,19 +315,22 @@ class ThreeDHomeDashboard extends HTMLElement {
   _initScene(container) {
     const THREE = this._THREE;
     this._scene = new THREE.Scene();
-    this._scene.background = new THREE.Color(0x1a1a2e);
-    this._scene.fog = new THREE.FogExp2(0x1a1a2e, 0.015);
+    const bg = new THREE.Color(this._settings.bgColor);
+    this._scene.background = bg;
+
     this._camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
-    this._camera.position.set(5, 5, 5);
+    this._camera.position.set(8, 12, 8);
+
     this._renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
     this._renderer.setSize(container.clientWidth, container.clientHeight);
     this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this._renderer.shadowMap.enabled = true;
     this._renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this._renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this._renderer.toneMappingExposure = 1.0;
+    this._renderer.toneMappingExposure = this._settings.exposure;
     this._renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.insertBefore(this._renderer.domElement, container.firstChild);
+
     this._controls = new this._OrbitControls(this._camera, this._renderer.domElement);
     this._controls.enableDamping = true;
     this._controls.dampingFactor = 0.08;
@@ -306,28 +338,49 @@ class ThreeDHomeDashboard extends HTMLElement {
     this._controls.panSpeed = 0.8;
     this._controls.rotateSpeed = 0.6;
     this._controls.zoomSpeed = 1.0;
-    this._controls.minDistance = 1;
-    this._controls.maxDistance = 100;
-    this._controls.maxPolarAngle = Math.PI * 0.85;
-    this._scene.add(new THREE.AmbientLight(0xffffff, 0.3));
-    const dl = new THREE.DirectionalLight(0xffffff, 0.8);
-    dl.position.set(10, 20, 10);
-    dl.castShadow = true;
-    dl.shadow.mapSize.width = 2048;
-    dl.shadow.mapSize.height = 2048;
-    this._scene.add(dl);
-    const fl = new THREE.DirectionalLight(0x8888ff, 0.3);
-    fl.position.set(-10, 5, -10);
-    this._scene.add(fl);
-    const grid = new THREE.GridHelper(50, 50, 0x333355, 0x222244);
-    grid.material.opacity = 0.3;
-    grid.material.transparent = true;
-    this._scene.add(grid);
+    this._controls.minDistance = 0.5;
+    this._controls.maxDistance = 200;
+
+    // Ambient light (soft fill)
+    this._ambientLight = new THREE.AmbientLight(0xffffff, this._settings.ambientIntensity);
+    this._scene.add(this._ambientLight);
+
+    // Sky light (hemisphere: sky blue from above, ground warmth from below)
+    this._skyLight = new THREE.HemisphereLight(0x87CEEB, 0x444422, this._settings.skyLightIntensity);
+    this._scene.add(this._skyLight);
+
+    // Sun / directional light
+    this._sunLight = new THREE.DirectionalLight(0xffffff, this._settings.sunIntensity);
+    this._sunLight.position.set(15, 30, 15);
+    this._sunLight.castShadow = true;
+    this._sunLight.shadow.mapSize.width = 2048;
+    this._sunLight.shadow.mapSize.height = 2048;
+    this._sunLight.shadow.camera.near = 0.5;
+    this._sunLight.shadow.camera.far = 100;
+    this._sunLight.shadow.camera.left = -30;
+    this._sunLight.shadow.camera.right = 30;
+    this._sunLight.shadow.camera.top = 30;
+    this._sunLight.shadow.camera.bottom = -30;
+    this._scene.add(this._sunLight);
+
+    // Secondary fill from opposite side
+    const fillLight = new THREE.DirectionalLight(0xffeedd, 0.3);
+    fillLight.position.set(-10, 8, -10);
+    this._scene.add(fillLight);
+
+    // Grid helper
+    this._gridHelper = new THREE.GridHelper(50, 50, 0x333355, 0x222244);
+    this._gridHelper.material.opacity = 0.3;
+    this._gridHelper.material.transparent = true;
+    this._scene.add(this._gridHelper);
+
     this._raycaster = new THREE.Raycaster();
     this._mouse = new THREE.Vector2();
     this._clock = new THREE.Clock();
+
     this._renderer.domElement.addEventListener("pointermove", (e) => this._onPointerMove(e));
     this._renderer.domElement.addEventListener("click", (e) => this._onClick(e));
+
     const ro = new ResizeObserver(() => {
       if (!container.clientWidth || !container.clientHeight) return;
       this._camera.aspect = container.clientWidth / container.clientHeight;
@@ -344,16 +397,25 @@ class ThreeDHomeDashboard extends HTMLElement {
     const box = new THREE.Box3().setFromObject(this._model);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
-    const d = Math.max(size.x, size.y, size.z) * 1.8;
-    this._camera.position.set(center.x + d*0.6, center.y + d*0.5, center.z + d*0.6);
+    const d = Math.max(size.x, size.y, size.z) * 1.5;
+    // Position camera at a nice isometric angle above
+    this._camera.position.set(center.x + d * 0.7, center.y + d * 0.9, center.z + d * 0.7);
     this._controls.target.copy(center);
     this._controls.update();
   }
 
+  _applyModelRotation() {
+    if (!this._model) return;
+    const deg = Math.PI / 180;
+    this._model.rotation.set(
+      this._settings.rotateX * deg,
+      this._settings.rotateY * deg,
+      this._settings.rotateZ * deg
+    );
+  }
+
   _animate() {
     this._animationId = requestAnimationFrame(() => this._animate());
-    const delta = this._clock ? this._clock.getDelta() : 0.016;
-    if (this._mixer) this._mixer.update(delta);
     if (this._controls) this._controls.update();
     if (this._renderer && this._scene && this._camera) this._renderer.render(this._scene, this._camera);
   }
@@ -612,14 +674,152 @@ class ThreeDHomeDashboard extends HTMLElement {
     return new this._THREE.Color(r/255, g/255, b/255);
   }
 
+  _toggleSettings() {
+    this._settingsOpen = !this._settingsOpen;
+    const sp = this.shadowRoot.getElementById("settings-panel");
+    if (this._settingsOpen) {
+      this._renderSettings();
+      sp.style.display = "block";
+    } else {
+      sp.style.display = "none";
+    }
+  }
+
+  _renderSettings() {
+    const sp = this.shadowRoot.getElementById("settings-panel");
+    const s = this._settings;
+    sp.innerHTML = `
+      <h3>Scene Settings</h3>
+      <div class="settings-group">
+        <h4>Lighting</h4>
+        <div class="setting-row">
+          <label>Ambient</label>
+          <input type="range" min="0" max="2" step="0.05" value="${s.ambientIntensity}" id="s-ambient">
+          <span class="setting-value">${s.ambientIntensity.toFixed(2)}</span>
+        </div>
+        <div class="setting-row">
+          <label>Sky Light</label>
+          <input type="range" min="0" max="2" step="0.05" value="${s.skyLightIntensity}" id="s-sky">
+          <span class="setting-value">${s.skyLightIntensity.toFixed(2)}</span>
+        </div>
+        <div class="setting-row">
+          <label>Sun</label>
+          <input type="range" min="0" max="3" step="0.05" value="${s.sunIntensity}" id="s-sun">
+          <span class="setting-value">${s.sunIntensity.toFixed(2)}</span>
+        </div>
+        <div class="setting-row">
+          <label>Exposure</label>
+          <input type="range" min="0.1" max="3" step="0.05" value="${s.exposure}" id="s-exposure">
+          <span class="setting-value">${s.exposure.toFixed(2)}</span>
+        </div>
+      </div>
+      <div class="settings-group">
+        <h4>Model Rotation</h4>
+        <div class="setting-row">
+          <label>X</label>
+          <input type="range" min="-180" max="180" step="1" value="${s.rotateX}" id="s-rx">
+          <span class="setting-value">${s.rotateX}&deg;</span>
+        </div>
+        <div class="setting-row">
+          <label>Y</label>
+          <input type="range" min="-180" max="180" step="1" value="${s.rotateY}" id="s-ry">
+          <span class="setting-value">${s.rotateY}&deg;</span>
+        </div>
+        <div class="setting-row">
+          <label>Z</label>
+          <input type="range" min="-180" max="180" step="1" value="${s.rotateZ}" id="s-rz">
+          <span class="setting-value">${s.rotateZ}&deg;</span>
+        </div>
+        <div class="setting-row">
+          <button class="btn btn-ghost btn-sm" id="s-reset-rot">Reset Rotation</button>
+          <button class="btn btn-primary btn-sm" id="s-recenter">Re-center Camera</button>
+        </div>
+      </div>
+      <div class="settings-group">
+        <h4>Display</h4>
+        <div class="setting-row">
+          <label>Background</label>
+          <input type="color" value="${s.bgColor}" id="s-bg">
+        </div>
+        <div class="setting-row">
+          <label>Show Grid</label>
+          <input type="checkbox" ${s.showGrid ? "checked" : ""} id="s-grid">
+        </div>
+        <div class="setting-row">
+          <label>Wireframe</label>
+          <input type="checkbox" ${s.showWireframe ? "checked" : ""} id="s-wire">
+        </div>
+      </div>`;
+
+    // Bind lighting sliders
+    const bindSlider = (id, key, applyFn) => {
+      const el = sp.querySelector(`#${id}`);
+      if (el) el.addEventListener("input", (e) => {
+        s[key] = parseFloat(e.target.value);
+        e.target.nextElementSibling.textContent = key.startsWith("rotate") ? `${s[key]}\u00b0` : s[key].toFixed(2);
+        applyFn();
+      });
+    };
+
+    bindSlider("s-ambient", "ambientIntensity", () => { if (this._ambientLight) this._ambientLight.intensity = s.ambientIntensity; });
+    bindSlider("s-sky", "skyLightIntensity", () => { if (this._skyLight) this._skyLight.intensity = s.skyLightIntensity; });
+    bindSlider("s-sun", "sunIntensity", () => { if (this._sunLight) this._sunLight.intensity = s.sunIntensity; });
+    bindSlider("s-exposure", "exposure", () => { if (this._renderer) this._renderer.toneMappingExposure = s.exposure; });
+
+    // Rotation sliders
+    bindSlider("s-rx", "rotateX", () => this._applyModelRotation());
+    bindSlider("s-ry", "rotateY", () => this._applyModelRotation());
+    bindSlider("s-rz", "rotateZ", () => this._applyModelRotation());
+
+    // Reset rotation
+    const resetBtn = sp.querySelector("#s-reset-rot");
+    if (resetBtn) resetBtn.addEventListener("click", () => {
+      s.rotateX = 0; s.rotateY = 0; s.rotateZ = 0;
+      this._applyModelRotation();
+      this._renderSettings();
+    });
+
+    // Re-center camera
+    const recenterBtn = sp.querySelector("#s-recenter");
+    if (recenterBtn) recenterBtn.addEventListener("click", () => this._fitCameraToModel());
+
+    // Background color
+    const bgInput = sp.querySelector("#s-bg");
+    if (bgInput) bgInput.addEventListener("input", (e) => {
+      s.bgColor = e.target.value;
+      if (this._scene) this._scene.background = new this._THREE.Color(s.bgColor);
+    });
+
+    // Grid toggle
+    const gridCb = sp.querySelector("#s-grid");
+    if (gridCb) gridCb.addEventListener("change", (e) => {
+      s.showGrid = e.target.checked;
+      if (this._gridHelper) this._gridHelper.visible = s.showGrid;
+    });
+
+    // Wireframe toggle
+    const wireCb = sp.querySelector("#s-wire");
+    if (wireCb) wireCb.addEventListener("change", (e) => {
+      s.showWireframe = e.target.checked;
+      this._meshList.forEach((m) => {
+        if (m.material) {
+          if (Array.isArray(m.material)) m.material.forEach((mt) => { mt.wireframe = s.showWireframe; });
+          else m.material.wireframe = s.showWireframe;
+        }
+      });
+    });
+  }
+
   _updateTopbar() {
     const actions = this.shadowRoot.getElementById("topbar-actions");
     if (!this._modelFilename) { actions.innerHTML = ""; return; }
     const eL = this._editMode ? "Done Editing" : "Edit Mode";
     const eC = this._editMode ? "btn-success" : "btn-accent";
     const eI = this._editMode ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
-    actions.innerHTML = `<button class="btn ${eC}" id="edit-btn">${eI} ${eL}</button><button class="btn btn-ghost" id="replace-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Replace</button><button class="btn btn-danger btn-sm" id="delete-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>`;
+    const sI = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+    actions.innerHTML = `<button class="btn ${eC}" id="edit-btn">${eI} ${eL}</button><button class="btn btn-ghost" id="settings-btn">${sI} Settings</button><button class="btn btn-ghost" id="replace-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Replace</button><button class="btn btn-danger btn-sm" id="delete-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>`;
     actions.querySelector("#edit-btn").addEventListener("click", () => this._toggleEditMode());
+    actions.querySelector("#settings-btn").addEventListener("click", () => this._toggleSettings());
     actions.querySelector("#replace-btn").addEventListener("click", () => { const input = document.createElement("input"); input.type = "file"; input.accept = ".sh3d"; input.onchange = (e) => { if (e.target.files[0]) this._uploadModel(e.target.files[0]); }; input.click(); });
     actions.querySelector("#delete-btn").addEventListener("click", async () => {
       if (confirm("Delete the current 3D model and all mappings?")) {
@@ -630,6 +830,8 @@ class ThreeDHomeDashboard extends HTMLElement {
         this._modelFilename = null;
         this._editMode = false;
         this.shadowRoot.getElementById("side-panel").style.display = "none";
+        this.shadowRoot.getElementById("settings-panel").style.display = "none";
+        this._settingsOpen = false;
         this.shadowRoot.getElementById("upload-overlay").style.display = "flex";
         this.shadowRoot.getElementById("hud").style.display = "none";
         this._updateTopbar();

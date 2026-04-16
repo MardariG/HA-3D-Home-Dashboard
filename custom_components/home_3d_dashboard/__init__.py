@@ -370,7 +370,7 @@ class SH3DAssetView(HomeAssistantView):
 
     url = "/api/home_3d_dashboard/sh3d/{p:.*}"
     name = "api:home_3d_dashboard:sh3d"
-    requires_auth = True
+    requires_auth = False
 
     def __init__(self, hass):
         self.hass = hass
