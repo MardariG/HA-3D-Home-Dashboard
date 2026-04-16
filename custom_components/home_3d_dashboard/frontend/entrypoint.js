@@ -312,20 +312,27 @@ class ThreeDHomeDashboard extends HTMLElement {
     const obj = await new Promise((resolve, reject) => {
       objLoader.load(objUrl, resolve, (p) => { if (p.total > 0) this.shadowRoot.getElementById("loading-text").textContent = `Loading... ${Math.round(p.loaded/p.total*100)}%`; }, reject);
     });
-    if (!materials) {
-      obj.traverse((c) => {
-        if (c.isMesh) {
+    obj.traverse((c) => {
+      if (c.isMesh) {
+        const upgradeMat = (m) => {
+          if (!m) return new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.7, metalness: 0.1, side: THREE.DoubleSide });
+          const sm = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide });
+          if (m.color) sm.color = m.color;
+          if (m.map) sm.map = m.map;
+          if (m.opacity < 1) { sm.opacity = m.opacity; sm.transparent = true; }
+          sm.roughness = m.shininess ? 1.0 - Math.min(m.shininess / 150, 0.85) : 0.7;
+          sm.metalness = m.specular ? Math.min((m.specular.r + m.specular.g + m.specular.b) / 3, 0.5) : 0.05;
+          return sm;
+        };
+        if (!materials) {
           c.material = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.7, metalness: 0.1, side: THREE.DoubleSide });
+        } else if (Array.isArray(c.material)) {
+          c.material = c.material.map(upgradeMat);
+        } else {
+          c.material = upgradeMat(c.material);
         }
-      });
-    } else {
-      obj.traverse((c) => {
-        if (c.isMesh && c.material) {
-          if (Array.isArray(c.material)) { c.material.forEach((m) => { m.side = THREE.DoubleSide; }); }
-          else { c.material.side = THREE.DoubleSide; }
-        }
-      });
-    }
+      }
+    });
     return obj;
   }
 

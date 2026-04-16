@@ -1,5 +1,7 @@
-"""Sweet Home 3D assembler - combines all objects into one OBJ."""
+"""Sweet Home 3D assembler v3 - materials, textures, modelRotation."""
 import zipfile
+import zlib
+import struct
 import os
 import math
 import shutil
@@ -8,17 +10,126 @@ import xml.etree.ElementTree as ET
 
 _LOGGER = logging.getLogger(__name__)
 
+# Built-in Sweet Home 3D material color palette
+_SH3D_COLORS = {
+    "white": (0.95, 0.95, 0.95),
+    "white.001": (0.95, 0.95, 0.95),
+    "flwhite": (0.92, 0.92, 0.92),
+    "flwhite1": (0.90, 0.90, 0.90),
+    "archwhite": (0.88, 0.87, 0.85),
+    "archwhite2": (0.85, 0.84, 0.82),
+    "silver": (0.78, 0.78, 0.78),
+    "ltgrey": (0.70, 0.70, 0.70),
+    "flltgrey": (0.65, 0.65, 0.65),
+    "flgrey": (0.55, 0.55, 0.55),
+    "dkgrey": (0.40, 0.40, 0.40),
+    "fldkgrey": (0.35, 0.35, 0.35),
+    "dkdkgrey": (0.25, 0.25, 0.25),
+    "fldkdkgrey": (0.20, 0.20, 0.20),
+    "flblack": (0.10, 0.10, 0.10),
+    "black": (0.05, 0.05, 0.05),
+    "bone": (0.89, 0.86, 0.79),
+    "lighttan": (0.85, 0.78, 0.65),
+    "sand_stone": (0.82, 0.76, 0.62),
+    "flltbrown": (0.60, 0.45, 0.30),
+    "red": (0.75, 0.15, 0.15),
+    "brzskin": (0.72, 0.55, 0.42),
+    "blondhair": (0.85, 0.75, 0.55),
+}
+
+
+
+def _manual_extract(zip_path, dest_dir):
+    """Extract SH3D ZIP handling Java-serialized Home entry."""
+    os.makedirs(dest_dir, exist_ok=True)
+    with open(zip_path, 'rb') as f:
+        data = f.read()
+
+    # Try standard zipfile first
+    try:
+        with zipfile.ZipFile(zip_path) as zf:
+            zf.extractall(dest_dir)
+            _LOGGER.info("Standard ZIP extraction OK")
+            return True
+    except Exception:
+        _LOGGER.info("Standard ZIP failed, using manual extraction")
+
+    # Find all PK local file headers
+    entries = []
+    pos = 0
+    while True:
+        idx = data.find(b'PK\x03\x04', pos)
+        if idx == -1:
+            break
+        fnlen = struct.unpack('<H', data[idx+26:idx+28])[0]
+        exlen = struct.unpack('<H', data[idx+28:idx+30])[0]
+        method = struct.unpack('<H', data[idx+8:idx+10])[0]
+        fname = data[idx+30:idx+30+fnlen].decode(
+            'utf-8', errors='replace'
+        )
+        dstart = idx + 30 + fnlen + exlen
+        entries.append((idx, fname, dstart, method))
+        pos = idx + 1
+
+    for i, (off, fname, ds, method) in enumerate(entries):
+        if fname.endswith('/') or fname == 'Home':
+            # Directory entry or Java serialized Home
+            if fname.endswith('/'):
+                dp = os.path.join(dest_dir, fname)
+                os.makedirs(dp, exist_ok=True)
+            continue
+        # Compute data end = next entry start
+        nxt = (
+            entries[i+1][0]
+            if i+1 < len(entries)
+            else len(data)
+        )
+        raw_chunk = data[ds:nxt]
+        out_path = os.path.join(dest_dir, fname)
+        out_dir = os.path.dirname(out_path)
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
+
+        if method == 0:
+            # Stored
+            comp_size = struct.unpack(
+                '<I', data[off+18:off+22]
+            )[0]
+            with open(out_path, 'wb') as fp:
+                fp.write(data[ds:ds+comp_size])
+        elif method == 8:
+            # Deflate - try multiple trims for data descriptor
+            extracted = False
+            for trim in [0, 12, 16, 24]:
+                try:
+                    cd = (
+                        raw_chunk[:len(raw_chunk)-trim]
+                        if trim
+                        else raw_chunk
+                    )
+                    result = zlib.decompress(cd, -15)
+                    with open(out_path, 'wb') as fp:
+                        fp.write(result)
+                    extracted = True
+                    break
+                except Exception:
+                    continue
+            if not extracted:
+                _LOGGER.debug("Skip %s: decompress fail", fname)
+        else:
+            _LOGGER.debug("Skip %s: method %d", fname, method)
+
+    _LOGGER.info("Extracted %d entries", len(entries))
+    return True
+
 
 def assemble_sh3d(zip_path, output_dir):
-    """Parse .sh3d ZIP archive and assemble all objects."""
+    """Parse .sh3d ZIP and assemble all objects with materials."""
     ed = os.path.join(output_dir, "_extracted")
     if os.path.exists(ed):
         shutil.rmtree(ed)
-    os.makedirs(ed, exist_ok=True)
-    os.makedirs(output_dir, exist_ok=True)
 
-    with zipfile.ZipFile(zip_path) as zf:
-        zf.extractall(ed)
+    _manual_extract(zip_path, ed)
 
     xml_path = os.path.join(ed, "Home.xml")
     if not os.path.exists(xml_path):
@@ -39,6 +150,14 @@ def assemble_sh3d(zip_path, output_dir):
             model = elem.get("model")
             if not model:
                 continue
+            # Parse modelRotation matrix (3x3)
+            mr_str = elem.get("modelRotation", "")
+            mr = None
+            if mr_str:
+                parts = mr_str.strip().split()
+                if len(parts) == 9:
+                    mr = [float(p) for p in parts]
+
             items.append({
                 "name": elem.get("name", "unnamed"),
                 "model": model,
@@ -63,13 +182,14 @@ def assemble_sh3d(zip_path, output_dir):
                     elem.get("modelMirrored")
                     == "true"
                 ),
+                "modelRotation": mr,
+                "color": elem.get("color"),
+                "shininess": elem.get("shininess"),
                 "tag": tag,
             })
 
     walls = []
-    wh_def = float(
-        root.get("wallHeight", 250)
-    )
+    wh_def = float(root.get("wallHeight", 250))
     for elem in root.iter("wall"):
         walls.append({
             "xs": float(elem.get("xStart", 0)),
@@ -89,12 +209,15 @@ def assemble_sh3d(zip_path, output_dir):
         len(items), len(walls),
     )
 
+    # ------ Helpers ------
     def parse_obj(path):
-        """Parse an OBJ file into components."""
+        """Parse OBJ file into components."""
         verts = []
         norms = []
         texcs = []
         faces = []
+        mtl_file = None
+        cur_mtl = None
         if not os.path.exists(path):
             return None
         with open(path, 'r', errors='ignore') as f:
@@ -131,7 +254,11 @@ def assemble_sh3d(zip_path, output_dir):
                         if len(idx) > 2 and idx[2]:
                             ni = int(idx[2])
                         face.append((vi, ti, ni))
-                    faces.append(face)
+                    faces.append((cur_mtl, face))
+                elif p[0] == 'mtllib':
+                    mtl_file = ' '.join(p[1:])
+                elif p[0] == 'usemtl':
+                    cur_mtl = ' '.join(p[1:])
         if not verts:
             return None
         return {
@@ -139,9 +266,70 @@ def assemble_sh3d(zip_path, output_dir):
             "vn": norms,
             "vt": texcs,
             "f": faces,
+            "mtl_file": mtl_file,
         }
 
-    out = ["# Assembled from Sweet Home 3D\n"]
+    def parse_mtl(path):
+        """Parse MTL file into material dict."""
+        materials = {}
+        cur = None
+        if not os.path.exists(path):
+            return materials
+        with open(path, 'r', errors='ignore') as f:
+            for line in f:
+                s = line.strip()
+                if not s or s.startswith('#'):
+                    continue
+                p = s.split()
+                if p[0] == 'newmtl':
+                    cur = ' '.join(p[1:])
+                    materials[cur] = []
+                elif cur is not None:
+                    materials[cur].append(s)
+        return materials
+
+    def resolve_model(model_ref):
+        """Resolve model reference to OBJ path."""
+        # Direct path with slash (folder/name.obj)
+        if '/' in model_ref:
+            p = os.path.join(ed, model_ref)
+            if os.path.isfile(p):
+                return p
+            return None
+        # Numbered reference - check if it's a directory
+        dp = os.path.join(ed, model_ref)
+        if os.path.isdir(dp):
+            # Find .obj inside
+            for fn in os.listdir(dp):
+                if fn.lower().endswith('.obj'):
+                    return os.path.join(dp, fn)
+            return None
+        # Plain file (standalone OBJ embedded as number)
+        if os.path.isfile(dp):
+            try:
+                with open(dp, 'r', errors='ignore') as f:
+                    first = f.read(500)
+                if 'v ' in first or first.startswith('#'):
+                    return dp
+            except Exception:
+                pass
+        return None
+
+    def resolve_mtl(obj_path, mtl_ref):
+        """Resolve MTL path relative to OBJ."""
+        if not mtl_ref:
+            return None
+        obj_dir = os.path.dirname(obj_path)
+        mp = os.path.join(obj_dir, mtl_ref)
+        if os.path.isfile(mp):
+            return mp
+        return None
+
+    # ------ Assembly ------
+    out_lines = ["# Assembled from Sweet Home 3D\n"]
+    out_lines.append("mtllib assembled.mtl\n\n")
+    all_materials = {}  # prefix -> {name: lines}
+    texture_files = []  # (src, dest_name)
     vo = 0
     vto = 0
     vno = 0
@@ -149,7 +337,6 @@ def assemble_sh3d(zip_path, output_dir):
     name_counts = {}
 
     def make_unique(raw_name):
-        """Generate a unique group name."""
         safe = raw_name.replace(' ', '_')
         safe = safe.replace('/', '_')
         safe = safe.replace('\\', '_')
@@ -159,44 +346,121 @@ def assemble_sh3d(zip_path, output_dir):
         name_counts[safe] += 1
         return f"{safe}_{name_counts[safe]}"
 
-    def resolve(model_ref):
-        """Resolve a model reference to a file path."""
-        if '/' in model_ref:
-            if model_ref.endswith('.obj'):
-                return os.path.join(
-                    ed, model_ref
-                )
-        p = os.path.join(ed, model_ref)
-        if os.path.isfile(p):
-            try:
-                with open(
-                    p, 'r', errors='ignore'
-                ) as f:
-                    first = f.read(300)
-                if 'v ' in first:
-                    return p
-                if first.startswith('#'):
-                    return p
-            except Exception:
-                pass
-        obj_p = p + '.obj'
-        if os.path.isfile(obj_p):
-            return obj_p
-        return None
-
     for item in items:
-        mp = resolve(item["model"])
-        if not mp:
+        obj_path = resolve_model(item["model"])
+        if not obj_path:
             _LOGGER.debug(
-                "Skip %s: no OBJ",
-                item["name"],
+                "Skip %s: no OBJ", item["name"]
             )
             continue
-        obj = parse_obj(mp)
+        obj = parse_obj(obj_path)
         if not obj:
             continue
 
+        gname = make_unique(item["name"])
+        prefix = gname + "__"
+
+        # --- Materials ---
+        mtl_map = {}  # old_name -> new_name
+        if obj["mtl_file"]:
+            mtl_path = resolve_mtl(
+                obj_path, obj["mtl_file"]
+            )
+            if mtl_path:
+                mats = parse_mtl(mtl_path)
+                mtl_dir = os.path.dirname(mtl_path)
+                for mname, mlines in mats.items():
+                    new_name = prefix + mname
+                    mtl_map[mname] = new_name
+                    # Process lines, fix texture paths
+                    new_lines = []
+                    for ml in mlines:
+                        parts = ml.split()
+                        if (
+                            len(parts) >= 2
+                            and parts[0] in (
+                                'map_Kd', 'map_Ka',
+                                'map_Ks', 'map_Ns',
+                                'map_d', 'map_bump',
+                                'bump', 'disp',
+                            )
+                        ):
+                            tex_ref = ' '.join(parts[1:])
+                            tex_src = os.path.join(
+                                mtl_dir, tex_ref
+                            )
+                            if os.path.isfile(tex_src):
+                                # Unique texture name
+                                tex_dest = (
+                                    gname + "_"
+                                    + os.path.basename(tex_ref)
+                                )
+                                texture_files.append(
+                                    (tex_src, tex_dest)
+                                )
+                                new_lines.append(
+                                    f"{parts[0]} {tex_dest}"
+                                )
+                            else:
+                                new_lines.append(ml)
+                        else:
+                            new_lines.append(ml)
+                    all_materials[new_name] = new_lines
+
+        # Handle standalone OBJ materials (no mtllib but has usemtl)
+        if not obj["mtl_file"] and not mtl_map:
+            seen_mtls = set()
+            for face_mtl, _ in obj["f"]:
+                if face_mtl:
+                    seen_mtls.add(face_mtl)
+            for sm in seen_mtls:
+                new_name = prefix + sm
+                mtl_map[sm] = new_name
+                rgb = _SH3D_COLORS.get(
+                    sm, (0.7, 0.7, 0.7)
+                )
+                all_materials[new_name] = [
+                    f"Ka 0.2 0.2 0.2",
+                    f"Kd {rgb[0]:.3f} {rgb[1]:.3f} {rgb[2]:.3f}",
+                    f"Ks 0.1 0.1 0.1",
+                    f"Ns 20",
+                    f"illum 2",
+                ]
+
+        # Override color from XML if set
+        xml_color = item.get("color")
+        if xml_color and not mtl_map:
+            # No MTL but has XML color - create material
+            try:
+                ci = int(xml_color)
+                r = ((ci >> 16) & 0xFF) / 255.0
+                g = ((ci >> 8) & 0xFF) / 255.0
+                b = (ci & 0xFF) / 255.0
+                mname = prefix + "xmlcolor"
+                all_materials[mname] = [
+                    f"Ka 0.2 0.2 0.2",
+                    f"Kd {r:.4f} {g:.4f} {b:.4f}",
+                    f"Ks 0.1 0.1 0.1",
+                    f"Ns 30",
+                    f"illum 2",
+                ]
+                mtl_map["__default__"] = mname
+            except Exception:
+                pass
+
+        # --- Geometry transforms ---
         verts = [v[:] for v in obj["v"]]
+
+        # Apply modelRotation matrix first (if present)
+        mr = item["modelRotation"]
+        if mr:
+            for v in verts:
+                x0, y0, z0 = v
+                v[0] = mr[0]*x0 + mr[1]*y0 + mr[2]*z0
+                v[1] = mr[3]*x0 + mr[4]*y0 + mr[5]*z0
+                v[2] = mr[6]*x0 + mr[7]*y0 + mr[8]*z0
+
+        # Compute bounding box after modelRotation
         mins = [
             min(v[i] for v in verts)
             for i in range(3)
@@ -239,28 +503,57 @@ def assemble_sh3d(zip_path, output_dir):
             v[1] = v[1] + py
             v[2] = rz + pz
 
-        gname = make_unique(item["name"])
-        out.append(f"g {gname}\n")
+        # Also transform normals if modelRotation
+        norms = [n[:] for n in obj["vn"]]
+        if mr:
+            for n in norms:
+                x0, y0, z0 = n
+                n[0] = mr[0]*x0 + mr[1]*y0 + mr[2]*z0
+                n[1] = mr[3]*x0 + mr[4]*y0 + mr[5]*z0
+                n[2] = mr[6]*x0 + mr[7]*y0 + mr[8]*z0
+        # Rotate normals by angle
+        if abs(ang) > 0.001:
+            for n in norms:
+                nx = ca * n[0] + sa * n[2]
+                nz = -sa * n[0] + ca * n[2]
+                n[0] = nx
+                n[2] = nz
+
+        # --- Write geometry ---
+        out_lines.append(f"g {gname}\n")
+
+        # Set default material if XML color override
+        if "__default__" in mtl_map:
+            out_lines.append(
+                f"usemtl {mtl_map['__default__']}\n"
+            )
 
         for v in verts:
-            out.append(
+            out_lines.append(
                 f"v {v[0]:.4f}"
                 f" {v[1]:.4f}"
                 f" {v[2]:.4f}\n"
             )
         for vt in obj["vt"]:
-            out.append(
+            out_lines.append(
                 f"vt {vt[0]:.4f}"
                 f" {vt[1]:.4f}\n"
             )
-        for vn in obj["vn"]:
-            out.append(
-                f"vn {vn[0]:.4f}"
-                f" {vn[1]:.4f}"
-                f" {vn[2]:.4f}\n"
+        for n in norms:
+            out_lines.append(
+                f"vn {n[0]:.4f}"
+                f" {n[1]:.4f}"
+                f" {n[2]:.4f}\n"
             )
 
-        for face in obj["f"]:
+        cur_face_mtl = None
+        for face_mtl, face in obj["f"]:
+            if face_mtl != cur_face_mtl:
+                cur_face_mtl = face_mtl
+                if face_mtl and face_mtl in mtl_map:
+                    out_lines.append(
+                        f"usemtl {mtl_map[face_mtl]}\n"
+                    )
             parts = []
             for vi, ti, ni in face:
                 vi2 = vi + vo if vi > 0 else vi - vo
@@ -271,16 +564,12 @@ def assemble_sh3d(zip_path, output_dir):
                         f"{vi2}/{ti2}/{ni2}"
                     )
                 elif ti2:
-                    parts.append(
-                        f"{vi2}/{ti2}"
-                    )
+                    parts.append(f"{vi2}/{ti2}")
                 elif ni2:
-                    parts.append(
-                        f"{vi2}//{ni2}"
-                    )
+                    parts.append(f"{vi2}//{ni2}")
                 else:
                     parts.append(f"{vi2}")
-            out.append(
+            out_lines.append(
                 "f " + " ".join(parts) + "\n"
             )
 
@@ -289,11 +578,21 @@ def assemble_sh3d(zip_path, output_dir):
         vno += len(obj["vn"])
         oc += 1
         _LOGGER.debug(
-            "Added %s (%d verts)",
-            gname, len(obj["v"]),
+            "Added %s (%d verts, %d mats)",
+            gname, len(obj["v"]), len(mtl_map),
         )
 
+    # --- Walls ---
     wi = 0
+    wall_mtl_name = "wall_material"
+    all_materials[wall_mtl_name] = [
+        "Ka 0.3 0.3 0.3",
+        "Kd 0.85 0.85 0.82",
+        "Ks 0.05 0.05 0.05",
+        "Ns 10",
+        "illum 2",
+    ]
+
     for w in walls:
         xs = w["xs"] / 100
         ys = w["ys"] / 100
@@ -318,10 +617,17 @@ def assemble_sh3d(zip_path, output_dir):
             (xe + nx, h, ye + ny),
             (xe - nx, h, ye - ny),
         ]
-        out.append(f"g Wall_{wi}\n")
-        out.append("usemtl wall_material\n")
+        # Wall normals
+        wn = [
+            (-nx/abs(nx) if nx else 0, 0, -ny/abs(ny) if ny else 0),
+            (nx/abs(nx) if nx else 0, 0, ny/abs(ny) if ny else 0),
+            (0, 1, 0),
+            (0, -1, 0),
+        ]
+        out_lines.append(f"g Wall_{wi}\n")
+        out_lines.append(f"usemtl {wall_mtl_name}\n")
         for v in wv:
-            out.append(
+            out_lines.append(
                 f"v {v[0]:.4f}"
                 f" {v[1]:.4f}"
                 f" {v[2]:.4f}\n"
@@ -336,7 +642,7 @@ def assemble_sh3d(zip_path, output_dir):
             (1, 2, 6, 5),
         ]
         for face in wall_faces:
-            out.append(
+            out_lines.append(
                 f"f {b+face[0]}"
                 f" {b+face[1]}"
                 f" {b+face[2]}"
@@ -346,28 +652,38 @@ def assemble_sh3d(zip_path, output_dir):
         wi += 1
 
     _LOGGER.info(
-        "Assembly: %d objs, %d walls, %d lines",
-        oc, wi, len(out),
+        "Assembly: %d objs, %d walls, %d mats, %d lines",
+        oc, wi, len(all_materials), len(out_lines),
     )
 
-    op = os.path.join(
-        output_dir, "assembled.obj"
-    )
-    with open(op, 'w') as f:
-        f.writelines(out)
+    # --- Write assembled.obj ---
+    obj_out = os.path.join(output_dir, "assembled.obj")
+    with open(obj_out, 'w') as f:
+        f.writelines(out_lines)
 
-    mp = os.path.join(
-        output_dir, "assembled.mtl"
-    )
-    with open(mp, 'w') as f:
-        f.write(
-            "newmtl wall_material\n"
-            "Kd 0.85 0.85 0.82\n"
-            "Ka 0.3 0.3 0.3\n"
-        )
+    # --- Write assembled.mtl ---
+    mtl_out = os.path.join(output_dir, "assembled.mtl")
+    with open(mtl_out, 'w') as f:
+        f.write("# Combined materials from Sweet Home 3D\n\n")
+        for mname, mlines in all_materials.items():
+            f.write(f"newmtl {mname}\n")
+            for ml in mlines:
+                f.write(f"{ml}\n")
+            f.write("\n")
 
-    _LOGGER.info("Wrote %s", op)
-    return op
+    # --- Copy texture files ---
+    for src, dest_name in texture_files:
+        dp = os.path.join(output_dir, dest_name)
+        try:
+            shutil.copy2(src, dp)
+        except Exception as e:
+            _LOGGER.debug("Texture copy fail: %s", e)
+
+    _LOGGER.info(
+        "Wrote %s (%d textures)",
+        obj_out, len(texture_files),
+    )
+    return obj_out
 
 
 if __name__ == "__main__":
