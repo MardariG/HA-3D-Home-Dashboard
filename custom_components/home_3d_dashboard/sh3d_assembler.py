@@ -473,9 +473,9 @@ def assemble_sh3d(zip_path, output_dir):
         rh = maxs[1] - mins[1] or 1
         rd = maxs[2] - mins[2] or 1
 
-        tw = item["width"]
-        td = item["depth"]
-        th = item["height"]
+        tw = item["width"] / 100.0
+        td = item["depth"] / 100.0
+        th = item["height"] / 100.0
         sx = tw / rw
         sy = th / rh
         sz = td / rd
