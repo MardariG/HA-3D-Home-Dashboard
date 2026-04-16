@@ -55,8 +55,9 @@ def _setup_integration(hass):
     fdir = os.path.dirname(__file__)
     fpath = os.path.join(fdir, "frontend")
     url_pfx = "/" + DOMAIN + "/frontend"
-    hass.http.register_static_path(
-        url_pfx, fpath, cache_headers=False,
+    from homeassistant.components.http import StaticPathConfig
+    hass.http.async_register_static_paths(
+        [StaticPathConfig(url_pfx, fpath, False)]
     )
     hass.http.register_view(ModelUploadView(hass))
     hass.http.register_view(ModelServeView(hass))
