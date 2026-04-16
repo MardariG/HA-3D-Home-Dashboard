@@ -1,11 +1,17 @@
 {
   "domain": "3d_home_dashboard",
   "name": "3D Home Dashboard",
-  "version": "1.0.0",
-  "documentation": "https://github.com/your-username/3d-home-dashboard",
-  "issue_tracker": "https://github.com/your-username/3d-home-dashboard/issues",
-  "dependencies": ["http", "websocket_api", "frontend"],
-  "codeowners": [],
+  "version": "1.0.1",
+  "documentation": "https://github.com/MardariG/HA-3D-Home-Dashboard",
+  "issue_tracker": "https://github.com/MardariG/HA-3D-Home-Dashboard/issues",
+  "dependencies": [
+    "http",
+    "websocket_api",
+    "frontend"
+  ],
+  "codeowners": [
+    "@MardariG"
+  ],
   "iot_class": "local_push",
-  "config_flow": false
+  "config_flow": true
 }
