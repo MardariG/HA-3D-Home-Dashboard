@@ -83,7 +83,11 @@ def _setup_integration(hass):
             "js_url": js,
         }
     }
-    hass.components.frontend.async_register_built_in_panel(
+    from homeassistant.components.frontend import (
+        async_register_built_in_panel,
+    )
+    async_register_built_in_panel(
+        hass,
         component_name="custom",
         sidebar_title="3D Dashboard",
         sidebar_icon="mdi:home-3d",
@@ -114,10 +118,10 @@ async def async_setup_entry(hass, entry):
 
 async def async_unload_entry(hass, entry):
     """Unload a config entry."""
-    panel_id = "home-3d-dashboard"
-    hass.components.frontend.async_remove_panel(
-        panel_id
+    from homeassistant.components.frontend import (
+        async_remove_panel,
     )
+    async_remove_panel(hass, "home-3d-dashboard")
     hass.data[DOMAIN]["_setup_done"] = False
     return True
 
