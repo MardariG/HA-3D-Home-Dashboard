@@ -45,6 +45,7 @@ class ThreeDHomeDashboard extends HTMLElement {
       rotateY: 0,
       rotateZ: 0,
       bgColor: "#1a1a2e",
+      groundColor: "#4a7c3f",
       showGrid: true,
       showWireframe: false,
     };
@@ -144,11 +145,11 @@ class ThreeDHomeDashboard extends HTMLElement {
         .hover-tooltip .tt-name { font-weight:600;margin-bottom:2px; }
         .hover-tooltip .tt-entity { color:var(--ts);font-size:11px; }
         .hover-tooltip .tt-state { font-size:11px;margin-top:2px; }
-        .settings-panel { position:absolute;top:56px;right:0;width:320px;background:var(--cb);border-left:1px solid var(--bc);border-bottom:1px solid var(--bc);border-radius:0 0 0 12px;z-index:25;padding:16px;overflow-y:auto;max-height:calc(100vh - 80px);animation:fadeIn 0.2s; }
+        .settings-panel { position:absolute;top:56px;right:0;width:340px;background:var(--cb);border-left:1px solid var(--bc);border-bottom:1px solid var(--bc);border-radius:0 0 0 12px;z-index:25;padding:16px;overflow-y:auto;max-height:calc(100vh - 80px);animation:fadeIn 0.2s; }
         .settings-panel h3 { font-size:15px;font-weight:600;margin-bottom:16px; }
         .settings-group { margin-bottom:16px; }
         .settings-group h4 { font-size:12px;color:var(--ts);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px; }
-        .setting-row { display:flex;align-items:center;justify-content:space-between;margin-bottom:8px; }
+        .setting-row { display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px; }
         .setting-row label { font-size:13px;flex-shrink:0;margin-right:12px; }
         .setting-row input[type="range"] { flex:1;accent-color:var(--pc); }
         .setting-row input[type="color"] { width:40px;height:28px;border:1px solid var(--bc);border-radius:4px;background:var(--bg);cursor:pointer; }
@@ -448,6 +449,34 @@ class ThreeDHomeDashboard extends HTMLElement {
     this._defaultCameraTarget = null;
   }
 
+  _updateGroundColor(hex) {
+    this._settings.groundColor = hex;
+    if (!this._grassCanvas || !this._grassTexture) return;
+    const c = this._grassCanvas;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = hex;
+    ctx.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 20000; i++) {
+      const x = Math.random() * 512;
+      const y = Math.random() * 512;
+      const br = 0.85 + Math.random() * 0.3;
+      const r = parseInt(hex.slice(1, 3), 16) * br;
+      const g = parseInt(hex.slice(3, 5), 16) * br;
+      const b = parseInt(hex.slice(5, 7), 16) * br;
+      ctx.fillStyle = `rgb(${Math.min(255,r|0)},${Math.min(255,g|0)},${Math.min(255,b|0)})`;
+      ctx.fillRect(x, y, 1 + Math.random() * 2, 1 + Math.random() * 3);
+    }
+    for (let i = 0; i < 200; i++) {
+      const x = Math.random() * 512;
+      const y = Math.random() * 512;
+      ctx.fillStyle = "rgba(0,0,0,0.06)";
+      ctx.beginPath();
+      ctx.ellipse(x, y, 8 + Math.random() * 20, 6 + Math.random() * 15, Math.random() * Math.PI, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    this._grassTexture.needsUpdate = true;
+  }
+
   _buildSkyEnvironment(THREE) {
     // --- Sky dome (large inverted sphere with gradient) ---
     const skyRadius = 500;
@@ -498,11 +527,43 @@ class ThreeDHomeDashboard extends HTMLElement {
     // Remove flat background color since we have the dome
     this._scene.background = null;
 
-    // --- Ground plane ---
+    // --- Ground plane with procedural grass texture ---
     const groundGeo = new THREE.CircleGeometry(skyRadius * 0.8, 64);
+    const grassCanvas = document.createElement("canvas");
+    grassCanvas.width = 512;
+    grassCanvas.height = 512;
+    const gCtx = grassCanvas.getContext("2d");
+    // Base color
+    const baseColor = this._settings.groundColor || "#4a7c3f";
+    gCtx.fillStyle = baseColor;
+    gCtx.fillRect(0, 0, 512, 512);
+    // Noise pattern for realism
+    for (let i = 0; i < 20000; i++) {
+      const x = Math.random() * 512;
+      const y = Math.random() * 512;
+      const brightness = 0.85 + Math.random() * 0.3;
+      const r = parseInt(baseColor.slice(1, 3), 16) * brightness;
+      const g = parseInt(baseColor.slice(3, 5), 16) * brightness;
+      const b = parseInt(baseColor.slice(5, 7), 16) * brightness;
+      gCtx.fillStyle = `rgb(${Math.min(255,r|0)},${Math.min(255,g|0)},${Math.min(255,b|0)})`;
+      gCtx.fillRect(x, y, 1 + Math.random() * 2, 1 + Math.random() * 3);
+    }
+    // Subtle darker patches
+    for (let i = 0; i < 200; i++) {
+      const x = Math.random() * 512;
+      const y = Math.random() * 512;
+      gCtx.fillStyle = "rgba(0,0,0,0.06)";
+      gCtx.beginPath();
+      gCtx.ellipse(x, y, 8 + Math.random() * 20, 6 + Math.random() * 15, Math.random() * Math.PI, 0, Math.PI * 2);
+      gCtx.fill();
+    }
+    const grassTex = new THREE.CanvasTexture(grassCanvas);
+    grassTex.wrapS = THREE.RepeatWrapping;
+    grassTex.wrapT = THREE.RepeatWrapping;
+    grassTex.repeat.set(40, 40);
     const groundMat = new THREE.MeshStandardMaterial({
-      color: 0x4a7c3f,
-      roughness: 0.95,
+      map: grassTex,
+      roughness: 0.92,
       metalness: 0.0,
     });
     this._groundPlane = new THREE.Mesh(groundGeo, groundMat);
@@ -510,6 +571,8 @@ class ThreeDHomeDashboard extends HTMLElement {
     this._groundPlane.position.y = -0.05;
     this._groundPlane.receiveShadow = true;
     this._scene.add(this._groundPlane);
+    this._grassCanvas = grassCanvas;
+    this._grassTexture = grassTex;
 
     // --- Sun ---
     const sunGeo = new THREE.SphereGeometry(12, 16, 16);
@@ -586,7 +649,7 @@ class ThreeDHomeDashboard extends HTMLElement {
       if (this._sunSphere) this._sunSphere.visible = false;
       if (this._moonSphere) { this._moonSphere.visible = true; this._moonSphere.position.set(100, 180, -80); }
       this._clouds.forEach((c) => c.children.forEach((p) => { p.material.opacity = 0.15; }));
-      if (this._groundPlane) this._groundPlane.material.color.set(0x1a2e1a);
+      this._updateGroundColor("#1a2e1a");
     } else if (condition === "cloudy" || condition === "rainy") {
       u.topColor.value.set(0x667788);
       u.horizonColor.value.set(0x99aabb);
@@ -595,7 +658,7 @@ class ThreeDHomeDashboard extends HTMLElement {
       if (this._moonSphere) this._moonSphere.visible = false;
       const opacity = condition === "rainy" ? 0.9 : 0.8;
       this._clouds.forEach((c) => c.children.forEach((p) => { p.material.opacity = opacity; p.material.color.set(condition === "rainy" ? 0x888888 : 0xcccccc); }));
-      if (this._groundPlane) this._groundPlane.material.color.set(condition === "rainy" ? 0x3a5a3a : 0x4a7c3f);
+      this._updateGroundColor(condition === "rainy" ? "#3a5a3a" : "#4a7c3f");
     } else {
       // sunny / default
       u.topColor.value.set(0x0077ff);
@@ -604,7 +667,7 @@ class ThreeDHomeDashboard extends HTMLElement {
       if (this._sunSphere) { this._sunSphere.visible = true; this._sunSphere.position.set(150, 200, -100); }
       if (this._moonSphere) this._moonSphere.visible = false;
       this._clouds.forEach((c) => c.children.forEach((p) => { p.material.opacity = 0.7; p.material.color.set(0xffffff); }));
-      if (this._groundPlane) this._groundPlane.material.color.set(0x4a7c3f);
+      this._updateGroundColor(this._settings.groundColor || "#4a7c3f");
     }
   }
 
@@ -984,6 +1047,10 @@ class ThreeDHomeDashboard extends HTMLElement {
       <div class="settings-group">
         <h4>Display</h4>
         <div class="setting-row">
+          <label>Ground Color</label>
+          <input type="color" value="${s.groundColor}" id="s-ground-color">
+        </div>
+        <div class="setting-row">
           <label>Show Grid</label>
           <input type="checkbox" ${s.showGrid ? "checked" : ""} id="s-grid">
         </div>
@@ -1020,10 +1087,9 @@ class ThreeDHomeDashboard extends HTMLElement {
       this._renderSettings();
     });
 
-    const bgInput = sp.querySelector("#s-bg");
-    if (bgInput) bgInput.addEventListener("input", (e) => {
-      s.bgColor = e.target.value;
-      if (this._scene) this._scene.background = new this._THREE.Color(s.bgColor);
+    const groundColorInput = sp.querySelector("#s-ground-color");
+    if (groundColorInput) groundColorInput.addEventListener("input", (e) => {
+      this._updateGroundColor(e.target.value);
     });
 
     const gridCb = sp.querySelector("#s-grid");
