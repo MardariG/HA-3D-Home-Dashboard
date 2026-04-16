@@ -220,7 +220,7 @@ class ThreeDHomeDashboard extends HTMLElement {
         this._modelType = result.model_type || "sh3d";
         this._objPath = result.obj_path || null;
         await this._loadModelFromServer(result.filename);
-        await this._loadMappings();
+        if (this._objPath) await this._loadMappings();
       }
     } catch (err) { console.error("Error checking model:", err); }
   }
@@ -265,7 +265,15 @@ class ThreeDHomeDashboard extends HTMLElement {
     if (!this._scene) this._initScene(canvasWrap);
     if (this._model) { this._scene.remove(this._model); this._model = null; this._meshList = []; this._originalMaterials.clear(); }
     try {
-      if (!this._objPath) { this._showLoading("No OBJ found in .sh3d file"); return; }
+      if (!this._objPath) {
+        this._hideLoading();
+        const uploadOv = this.shadowRoot.getElementById("upload-overlay");
+        uploadOv.style.display = "flex";
+        const ua = this.shadowRoot.getElementById("upload-area");
+        ua.querySelector("p").innerHTML = '<span style="color:#f44336;font-weight:600">No OBJ found in .sh3d file</span><br>Please re-upload or delete the model and try again.<br>Sweet Home 3D (.sh3d) files supported';
+        this._updateTopbar();
+        return;
+      }
       const sceneRoot = await this._loadOBJ(`/api/home_3d_dashboard/sh3d/${this._objPath}`, `/api/home_3d_dashboard/sh3d/`);
       this._model = sceneRoot;
       this._scene.add(this._model);
