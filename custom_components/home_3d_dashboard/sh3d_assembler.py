@@ -52,6 +52,23 @@ def _is_glass_material(name):
     return any(kw in low for kw in _GLASS_KEYWORDS)
 
 
+def _looks_like_glass_color(mat_lines):
+    """Check if material has dark neutral Kd (likely glass)."""
+    for line in mat_lines:
+        parts = line.strip().split()
+        if len(parts) >= 4 and parts[0] == 'Kd':
+            try:
+                r, g, b = float(parts[1]), float(parts[2]), float(parts[3])
+                # Dark and neutral = likely glass
+                avg = (r + g + b) / 3
+                spread = max(r, g, b) - min(r, g, b)
+                if avg < 0.45 and spread < 0.15:
+                    return True
+            except ValueError:
+                pass
+    return False
+
+
 def _manual_extract(zip_path, dest_dir):
     """Extract SH3D ZIP handling Java-serialized Home entry."""
     os.makedirs(dest_dir, exist_ok=True)
@@ -471,6 +488,32 @@ def assemble_sh3d(zip_path, output_dir):
                 mtl_map["__default__"] = mname
             except Exception:
                 pass
+
+        # --- Glass detection for doorOrWindow items ---
+        if item["tag"] == "doorOrWindow":
+            for old_name, new_name in mtl_map.items():
+                if new_name in all_materials:
+                    mlines = all_materials[new_name]
+                    has_d = any(
+                        ln.strip().startswith('d ')
+                        for ln in mlines
+                    )
+                    if not has_d:
+                        is_glass = (
+                            _is_glass_material(old_name)
+                            or _looks_like_glass_color(mlines)
+                        )
+                        if is_glass:
+                            mlines.append("d 0.25")
+                            # Make glass slightly blue-tinted
+                            # Replace Kd with light blue
+                            all_materials[new_name] = [
+                                ln for ln in mlines
+                                if not ln.strip().startswith('Kd ')
+                            ]
+                            all_materials[new_name].append(
+                                "Kd 0.65 0.78 0.88"
+                            )
 
         # --- Geometry transforms ---
         verts = [v[:] for v in obj["v"]]
