@@ -28,6 +28,8 @@ WS_GET = DOMAIN + "/get_mappings"
 WS_SAVE = DOMAIN + "/save_mappings"
 WS_INFO = DOMAIN + "/get_model_info"
 WS_DEL = DOMAIN + "/delete_model"
+WS_GET_SETTINGS = DOMAIN + "/get_settings"
+WS_SAVE_SETTINGS = DOMAIN + "/save_settings"
 
 FRONTEND_DIR = os.path.join(
     os.path.dirname(__file__), "frontend"
@@ -59,6 +61,7 @@ async def _setup_integration(hass):
         "mappings": {},
         "model_filename": None,
         "model_type": None,
+        "settings": {},
         "_setup_done": False,
     }
     hass.data.setdefault(DOMAIN, default)
@@ -84,6 +87,9 @@ async def _setup_integration(hass):
                 d["model_type"] = (
                     data.get("model_type")
                 )
+                d["settings"] = (
+                    data.get("settings", {})
+                )
         except Exception:
             _LOGGER.exception("Load failed")
     hass.http.register_view(FrontendView())
@@ -107,6 +113,12 @@ async def _setup_integration(hass):
     )
     websocket_api.async_register_command(
         hass, ws_delete_model
+    )
+    websocket_api.async_register_command(
+        hass, ws_get_settings
+    )
+    websocket_api.async_register_command(
+        hass, ws_save_settings
     )
     js_url = (
         "/api/" + DOMAIN
@@ -169,6 +181,7 @@ def _save_data(hass):
             dd["model_filename"]
         ),
         "model_type": dd["model_type"],
+        "settings": dd.get("settings", {}),
     }
     with open(sp, "w") as fp:
         json.dump(payload, fp, indent=2)
@@ -455,3 +468,31 @@ async def ws_delete_model(hass, conn, msg):
     )
     r = {"success": True}
     conn.send_result(msg["id"], r)
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): WS_GET_SETTINGS}
+)
+@websocket_api.async_response
+async def ws_get_settings(hass, conn, msg):
+    data = hass.data[DOMAIN].get(
+        "settings", {}
+    )
+    conn.send_result(msg["id"], data)
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_SAVE_SETTINGS,
+    vol.Required("settings"): dict,
+})
+@websocket_api.async_response
+async def ws_save_settings(hass, conn, msg):
+    hass.data[DOMAIN]["settings"] = (
+        msg["settings"]
+    )
+    await hass.async_add_executor_job(
+        _save_data, hass
+    )
+    conn.send_result(
+        msg["id"], {"success": True}
+    )

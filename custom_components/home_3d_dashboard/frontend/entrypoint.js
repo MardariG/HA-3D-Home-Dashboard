@@ -222,6 +222,7 @@ class ThreeDHomeDashboard extends HTMLElement {
   async _checkExistingModel() {
     if (!this._hass) return;
     try {
+      await this._loadSettings();
       const result = await this._hass.callWS({ type: "home_3d_dashboard/get_model_info" });
       if (result && result.filename) {
         this._modelFilename = result.filename;
@@ -296,6 +297,7 @@ class ThreeDHomeDashboard extends HTMLElement {
       });
       this._applyModelRotation();
       this._fitCameraToModel();
+      this._applyLoadedSettings();
       this.shadowRoot.getElementById("upload-overlay").style.display = "none";
       this._hideLoading();
       this._updateTopbar();
@@ -447,6 +449,54 @@ class ThreeDHomeDashboard extends HTMLElement {
   _clearDefaultCamera() {
     this._defaultCameraPos = null;
     this._defaultCameraTarget = null;
+  }
+
+  async _loadSettings() {
+    if (!this._hass) return;
+    try {
+      const saved = await this._hass.callWS({ type: "home_3d_dashboard/get_settings" });
+      if (saved && typeof saved === "object") {
+        Object.assign(this._settings, saved);
+        if (saved.defaultCameraPos && saved.defaultCameraTarget) {
+          const THREE = this._THREE;
+          if (THREE) {
+            this._defaultCameraPos = new THREE.Vector3(saved.defaultCameraPos.x, saved.defaultCameraPos.y, saved.defaultCameraPos.z);
+            this._defaultCameraTarget = new THREE.Vector3(saved.defaultCameraTarget.x, saved.defaultCameraTarget.y, saved.defaultCameraTarget.z);
+          }
+        }
+      }
+    } catch (err) { console.warn("Failed to load settings:", err); }
+  }
+
+  _saveSettings() {
+    if (!this._hass) return;
+    const s = { ...this._settings };
+    if (this._defaultCameraPos) {
+      s.defaultCameraPos = { x: this._defaultCameraPos.x, y: this._defaultCameraPos.y, z: this._defaultCameraPos.z };
+    }
+    if (this._defaultCameraTarget) {
+      s.defaultCameraTarget = { x: this._defaultCameraTarget.x, y: this._defaultCameraTarget.y, z: this._defaultCameraTarget.z };
+    }
+    this._hass.callWS({ type: "home_3d_dashboard/save_settings", settings: s }).catch((err) => console.warn("Failed to save settings:", err));
+  }
+
+  _applyLoadedSettings() {
+    const s = this._settings;
+    if (this._ambientLight) this._ambientLight.intensity = s.ambientIntensity;
+    if (this._skyLight) this._skyLight.intensity = s.skyLightIntensity;
+    if (this._sunLight) this._sunLight.intensity = s.sunIntensity;
+    if (this._renderer) this._renderer.toneMappingExposure = s.exposure;
+    if (this._gridHelper) this._gridHelper.visible = s.showGrid;
+    if (this._groundPlane) this._groundPlane.material.color.set(s.groundColor || "#4a7c3f");
+    if (s.showWireframe) {
+      this._meshList.forEach((m) => {
+        if (m.material) {
+          if (Array.isArray(m.material)) m.material.forEach((mt) => { mt.wireframe = true; });
+          else m.material.wireframe = true;
+        }
+      });
+    }
+    this._applyWeatherFromEntity();
   }
 
   _updateGroundColor(hex) {
@@ -1011,6 +1061,7 @@ class ThreeDHomeDashboard extends HTMLElement {
         s[key] = parseFloat(e.target.value);
         e.target.nextElementSibling.textContent = key.startsWith("rotate") ? `${s[key]}\u00b0` : s[key].toFixed(2);
         applyFn();
+        this._saveSettings();
       });
     };
 
@@ -1022,25 +1073,28 @@ class ThreeDHomeDashboard extends HTMLElement {
     const recenterBtn = sp.querySelector("#s-recenter");
     if (recenterBtn) recenterBtn.addEventListener("click", () => this._fitCameraToModel());
     const setDefaultBtn = sp.querySelector("#s-setdefault");
-    if (setDefaultBtn) setDefaultBtn.addEventListener("click", () => { this._setDefaultCamera(); this._renderSettings(); });
+    if (setDefaultBtn) setDefaultBtn.addEventListener("click", () => { this._setDefaultCamera(); this._saveSettings(); this._renderSettings(); });
     const clearDefaultBtn = sp.querySelector("#s-cleardefault");
-    if (clearDefaultBtn) clearDefaultBtn.addEventListener("click", () => { this._clearDefaultCamera(); this._renderSettings(); });
+    if (clearDefaultBtn) clearDefaultBtn.addEventListener("click", () => { this._clearDefaultCamera(); this._saveSettings(); this._renderSettings(); });
     const weatherSelect = sp.querySelector("#s-weather");
     if (weatherSelect) weatherSelect.addEventListener("change", (e) => {
       s.weatherEntity = e.target.value || "";
       this._applyWeatherFromEntity();
+      this._saveSettings();
       this._renderSettings();
     });
 
     const groundColorInput = sp.querySelector("#s-ground-color");
     if (groundColorInput) groundColorInput.addEventListener("input", (e) => {
       this._updateGroundColor(e.target.value);
+      this._saveSettings();
     });
 
     const gridCb = sp.querySelector("#s-grid");
     if (gridCb) gridCb.addEventListener("change", (e) => {
       s.showGrid = e.target.checked;
       if (this._gridHelper) this._gridHelper.visible = s.showGrid;
+      this._saveSettings();
     });
 
     const wireCb = sp.querySelector("#s-wire");
@@ -1052,6 +1106,7 @@ class ThreeDHomeDashboard extends HTMLElement {
           else m.material.wireframe = s.showWireframe;
         }
       });
+      this._saveSettings();
     });
   }
 
