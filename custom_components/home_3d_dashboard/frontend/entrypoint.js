@@ -48,10 +48,17 @@ class ThreeDHomeDashboard extends HTMLElement {
       showGrid: true,
       showWireframe: false,
     };
+    this._defaultCameraPos = null;
+    this._defaultCameraTarget = null;
     this._ambientLight = null;
     this._skyLight = null;
     this._sunLight = null;
     this._gridHelper = null;
+    this._skyDome = null;
+    this._sunSphere = null;
+    this._moonSphere = null;
+    this._clouds = [];
+    this._groundPlane = null;
   }
 
   set hass(hass) {
@@ -393,6 +400,8 @@ class ThreeDHomeDashboard extends HTMLElement {
     this._gridHelper.material.transparent = true;
     this._scene.add(this._gridHelper);
 
+    this._buildSkyEnvironment(THREE);
+
     this._raycaster = new THREE.Raycaster();
     this._mouse = new THREE.Vector2();
     this._clock = new THREE.Clock();
@@ -413,6 +422,12 @@ class ThreeDHomeDashboard extends HTMLElement {
   _fitCameraToModel() {
     const THREE = this._THREE;
     if (!this._model) return;
+    if (this._defaultCameraPos && this._defaultCameraTarget) {
+      this._camera.position.copy(this._defaultCameraPos);
+      this._controls.target.copy(this._defaultCameraTarget);
+      this._controls.update();
+      return;
+    }
     const box = new THREE.Box3().setFromObject(this._model);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
@@ -421,6 +436,176 @@ class ThreeDHomeDashboard extends HTMLElement {
     this._camera.position.set(center.x + d * 0.5, center.y + d * 0.9, center.z + d * 0.5);
     this._controls.target.copy(center);
     this._controls.update();
+  }
+
+  _setDefaultCamera() {
+    this._defaultCameraPos = this._camera.position.clone();
+    this._defaultCameraTarget = this._controls.target.clone();
+  }
+
+  _clearDefaultCamera() {
+    this._defaultCameraPos = null;
+    this._defaultCameraTarget = null;
+  }
+
+  _buildSkyEnvironment(THREE) {
+    // --- Sky dome (large inverted sphere with gradient) ---
+    const skyRadius = 500;
+    const skyGeo = new THREE.SphereGeometry(skyRadius, 32, 16);
+    const skyVertexShader = `
+      varying vec3 vWorldPosition;
+      void main() {
+        vec4 worldPos = modelMatrix * vec4(position, 1.0);
+        vWorldPosition = worldPos.xyz;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `;
+    const skyFragmentShader = `
+      uniform vec3 topColor;
+      uniform vec3 horizonColor;
+      uniform vec3 bottomColor;
+      uniform float offset;
+      uniform float exponent;
+      varying vec3 vWorldPosition;
+      void main() {
+        float h = normalize(vWorldPosition + offset).y;
+        if (h > 0.0) {
+          gl_FragColor = vec4(mix(horizonColor, topColor, pow(max(h, 0.0), exponent)), 1.0);
+        } else {
+          gl_FragColor = vec4(mix(horizonColor, bottomColor, pow(min(-h, 1.0), 0.5)), 1.0);
+        }
+      }
+    `;
+    const skyUniforms = {
+      topColor: { value: new THREE.Color(0x0077ff) },
+      horizonColor: { value: new THREE.Color(0xb0d4f1) },
+      bottomColor: { value: new THREE.Color(0x445533) },
+      offset: { value: 10 },
+      exponent: { value: 0.6 },
+    };
+    const skyMat = new THREE.ShaderMaterial({
+      uniforms: skyUniforms,
+      vertexShader: skyVertexShader,
+      fragmentShader: skyFragmentShader,
+      side: THREE.BackSide,
+      depthWrite: false,
+    });
+    this._skyDome = new THREE.Mesh(skyGeo, skyMat);
+    this._skyDome.renderOrder = -1;
+    this._scene.add(this._skyDome);
+    this._skyUniforms = skyUniforms;
+
+    // Remove flat background color since we have the dome
+    this._scene.background = null;
+
+    // --- Ground plane ---
+    const groundGeo = new THREE.CircleGeometry(skyRadius * 0.8, 64);
+    const groundMat = new THREE.MeshStandardMaterial({
+      color: 0x4a7c3f,
+      roughness: 0.95,
+      metalness: 0.0,
+    });
+    this._groundPlane = new THREE.Mesh(groundGeo, groundMat);
+    this._groundPlane.rotation.x = -Math.PI / 2;
+    this._groundPlane.position.y = -0.05;
+    this._groundPlane.receiveShadow = true;
+    this._scene.add(this._groundPlane);
+
+    // --- Sun ---
+    const sunGeo = new THREE.SphereGeometry(12, 16, 16);
+    const sunMat = new THREE.MeshBasicMaterial({ color: 0xffee88 });
+    this._sunSphere = new THREE.Mesh(sunGeo, sunMat);
+    this._sunSphere.position.set(150, 200, -100);
+    this._scene.add(this._sunSphere);
+
+    // Sun glow
+    const glowGeo = new THREE.SphereGeometry(18, 16, 16);
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: 0xffdd66,
+      transparent: true,
+      opacity: 0.2,
+    });
+    const glowMesh = new THREE.Mesh(glowGeo, glowMat);
+    this._sunSphere.add(glowMesh);
+
+    // --- Moon ---
+    const moonGeo = new THREE.SphereGeometry(8, 16, 16);
+    const moonMat = new THREE.MeshBasicMaterial({ color: 0xddeeff });
+    this._moonSphere = new THREE.Mesh(moonGeo, moonMat);
+    this._moonSphere.position.set(-150, -100, 100);
+    this._moonSphere.visible = false;
+    this._scene.add(this._moonSphere);
+
+    // --- Clouds ---
+    this._clouds = [];
+    const cloudMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.7,
+      depthWrite: false,
+    });
+    for (let i = 0; i < 15; i++) {
+      const cGroup = new THREE.Group();
+      const puffCount = 3 + Math.floor(Math.random() * 4);
+      for (let j = 0; j < puffCount; j++) {
+        const r = 3 + Math.random() * 5;
+        const puffGeo = new THREE.SphereGeometry(r, 8, 6);
+        const puff = new THREE.Mesh(puffGeo, cloudMat);
+        puff.position.set(
+          (Math.random() - 0.5) * 12,
+          (Math.random() - 0.3) * 3,
+          (Math.random() - 0.5) * 6
+        );
+        puff.scale.y = 0.4 + Math.random() * 0.3;
+        cGroup.add(puff);
+      }
+      const dist = 80 + Math.random() * 200;
+      const angle = Math.random() * Math.PI * 2;
+      cGroup.position.set(
+        Math.cos(angle) * dist,
+        60 + Math.random() * 80,
+        Math.sin(angle) * dist
+      );
+      cGroup.userData.speed = 0.02 + Math.random() * 0.05;
+      cGroup.userData.angle = angle;
+      cGroup.userData.dist = dist;
+      this._scene.add(cGroup);
+      this._clouds.push(cGroup);
+    }
+  }
+
+  _updateSkyForWeather(condition) {
+    // condition: "sunny", "cloudy", "rainy", "night", "clear-night"
+    if (!this._skyUniforms) return;
+    const THREE = this._THREE;
+    const u = this._skyUniforms;
+    if (condition === "night" || condition === "clear-night") {
+      u.topColor.value.set(0x0a0a2e);
+      u.horizonColor.value.set(0x1a1a3e);
+      u.bottomColor.value.set(0x111122);
+      if (this._sunSphere) this._sunSphere.visible = false;
+      if (this._moonSphere) { this._moonSphere.visible = true; this._moonSphere.position.set(100, 180, -80); }
+      this._clouds.forEach((c) => c.children.forEach((p) => { p.material.opacity = 0.15; }));
+      if (this._groundPlane) this._groundPlane.material.color.set(0x1a2e1a);
+    } else if (condition === "cloudy" || condition === "rainy") {
+      u.topColor.value.set(0x667788);
+      u.horizonColor.value.set(0x99aabb);
+      u.bottomColor.value.set(0x445544);
+      if (this._sunSphere) this._sunSphere.visible = false;
+      if (this._moonSphere) this._moonSphere.visible = false;
+      const opacity = condition === "rainy" ? 0.9 : 0.8;
+      this._clouds.forEach((c) => c.children.forEach((p) => { p.material.opacity = opacity; p.material.color.set(condition === "rainy" ? 0x888888 : 0xcccccc); }));
+      if (this._groundPlane) this._groundPlane.material.color.set(condition === "rainy" ? 0x3a5a3a : 0x4a7c3f);
+    } else {
+      // sunny / default
+      u.topColor.value.set(0x0077ff);
+      u.horizonColor.value.set(0xb0d4f1);
+      u.bottomColor.value.set(0x445533);
+      if (this._sunSphere) { this._sunSphere.visible = true; this._sunSphere.position.set(150, 200, -100); }
+      if (this._moonSphere) this._moonSphere.visible = false;
+      this._clouds.forEach((c) => c.children.forEach((p) => { p.material.opacity = 0.7; p.material.color.set(0xffffff); }));
+      if (this._groundPlane) this._groundPlane.material.color.set(0x4a7c3f);
+    }
   }
 
   _applyModelRotation() {
@@ -436,6 +621,16 @@ class ThreeDHomeDashboard extends HTMLElement {
   _animate() {
     this._animationId = requestAnimationFrame(() => this._animate());
     if (this._controls) this._controls.update();
+    // Drift clouds slowly
+    for (const c of this._clouds) {
+      c.userData.angle += c.userData.speed * 0.002;
+      c.position.x = Math.cos(c.userData.angle) * c.userData.dist;
+      c.position.z = Math.sin(c.userData.angle) * c.userData.dist;
+    }
+    // Keep sky dome centered on camera
+    if (this._skyDome && this._camera) {
+      this._skyDome.position.copy(this._camera.position);
+    }
     if (this._renderer && this._scene && this._camera) this._renderer.render(this._scene, this._camera);
   }
 
@@ -637,6 +832,34 @@ class ThreeDHomeDashboard extends HTMLElement {
       else if (domain === "switch") this._applySwitchState(mesh, state);
       else if (domain === "sensor") this._applySensorState(mesh, state);
     }
+    this._applyWeatherFromEntity();
+  }
+
+  _applyWeatherFromEntity() {
+    const eid = this._settings.weatherEntity;
+    if (!eid || !this._hass?.states?.[eid]) {
+      this._updateSkyForWeather("sunny");
+      return;
+    }
+    const st = this._hass.states[eid].state;
+    const map = {
+      "sunny": "sunny",
+      "clear-night": "clear-night",
+      "partlycloudy": "cloudy",
+      "cloudy": "cloudy",
+      "fog": "cloudy",
+      "rainy": "rainy",
+      "pouring": "rainy",
+      "snowy": "rainy",
+      "snowy-rainy": "rainy",
+      "hail": "rainy",
+      "lightning": "rainy",
+      "lightning-rainy": "rainy",
+      "windy": "sunny",
+      "windy-variant": "cloudy",
+      "exceptional": "cloudy",
+    };
+    this._updateSkyForWeather(map[st] || (st.includes("night") ? "night" : "sunny"));
   }
 
   _applyLightState(mesh, state) {
@@ -736,33 +959,30 @@ class ThreeDHomeDashboard extends HTMLElement {
         </div>
       </div>
       <div class="settings-group">
-        <h4>Model Rotation</h4>
+        <h4>Camera</h4>
         <div class="setting-row">
-          <label>X</label>
-          <input type="range" min="-180" max="180" step="1" value="${s.rotateX}" id="s-rx">
-          <span class="setting-value">${s.rotateX}&deg;</span>
-        </div>
-        <div class="setting-row">
-          <label>Y</label>
-          <input type="range" min="-180" max="180" step="1" value="${s.rotateY}" id="s-ry">
-          <span class="setting-value">${s.rotateY}&deg;</span>
-        </div>
-        <div class="setting-row">
-          <label>Z</label>
-          <input type="range" min="-180" max="180" step="1" value="${s.rotateZ}" id="s-rz">
-          <span class="setting-value">${s.rotateZ}&deg;</span>
-        </div>
-        <div class="setting-row">
-          <button class="btn btn-ghost btn-sm" id="s-reset-rot">Reset Rotation</button>
           <button class="btn btn-primary btn-sm" id="s-recenter">Re-center Camera</button>
+          <button class="btn btn-accent btn-sm" id="s-setdefault">Set as Default</button>
+          ${this._defaultCameraPos ? '<button class="btn btn-danger btn-sm" id="s-cleardefault">Clear Default</button>' : ''}
+        </div>
+      </div>
+      <div class="settings-group">
+        <h4>Weather Entity</h4>
+        <div class="setting-row">
+          <select id="s-weather" style="flex:1;padding:6px 8px;background:var(--bg);color:var(--tc);border:1px solid var(--bc);border-radius:6px;font-size:12px;">
+            <option value="">-- None (sunny default) --</option>
+            ${Object.keys(this._hass?.states || {}).filter((e) => e.startsWith("weather.")).map((e) => {
+              const n = this._hass.states[e].attributes.friendly_name || e;
+              return `<option value="${e}" ${e === (s.weatherEntity || "") ? "selected" : ""}>${n}</option>`;
+            }).join("")}
+          </select>
+        </div>
+        <div class="setting-row">
+          <span class="setting-value" style="min-width:auto">${s.weatherEntity ? (this._hass?.states?.[s.weatherEntity]?.state || "unknown") : "sunny"}</span>
         </div>
       </div>
       <div class="settings-group">
         <h4>Display</h4>
-        <div class="setting-row">
-          <label>Background</label>
-          <input type="color" value="${s.bgColor}" id="s-bg">
-        </div>
         <div class="setting-row">
           <label>Show Grid</label>
           <input type="checkbox" ${s.showGrid ? "checked" : ""} id="s-grid">
@@ -787,19 +1007,18 @@ class ThreeDHomeDashboard extends HTMLElement {
     bindSlider("s-sun", "sunIntensity", () => { if (this._sunLight) this._sunLight.intensity = s.sunIntensity; });
     bindSlider("s-exposure", "exposure", () => { if (this._renderer) this._renderer.toneMappingExposure = s.exposure; });
 
-    bindSlider("s-rx", "rotateX", () => this._applyModelRotation());
-    bindSlider("s-ry", "rotateY", () => this._applyModelRotation());
-    bindSlider("s-rz", "rotateZ", () => this._applyModelRotation());
-
-    const resetBtn = sp.querySelector("#s-reset-rot");
-    if (resetBtn) resetBtn.addEventListener("click", () => {
-      s.rotateX = 0; s.rotateY = 0; s.rotateZ = 0;
-      this._applyModelRotation();
-      this._renderSettings();
-    });
-
     const recenterBtn = sp.querySelector("#s-recenter");
     if (recenterBtn) recenterBtn.addEventListener("click", () => this._fitCameraToModel());
+    const setDefaultBtn = sp.querySelector("#s-setdefault");
+    if (setDefaultBtn) setDefaultBtn.addEventListener("click", () => { this._setDefaultCamera(); this._renderSettings(); });
+    const clearDefaultBtn = sp.querySelector("#s-cleardefault");
+    if (clearDefaultBtn) clearDefaultBtn.addEventListener("click", () => { this._clearDefaultCamera(); this._renderSettings(); });
+    const weatherSelect = sp.querySelector("#s-weather");
+    if (weatherSelect) weatherSelect.addEventListener("change", (e) => {
+      s.weatherEntity = e.target.value || "";
+      this._applyWeatherFromEntity();
+      this._renderSettings();
+    });
 
     const bgInput = sp.querySelector("#s-bg");
     if (bgInput) bgInput.addEventListener("input", (e) => {
