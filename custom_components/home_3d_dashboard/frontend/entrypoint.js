@@ -324,7 +324,7 @@ class ThreeDHomeDashboard extends HTMLElement {
     });
     obj.traverse((c) => {
       if (c.isMesh) {
-        const _glassRe = /glass|vitre|vetro|vidrio|glas|cristal|transparent|window|fenster|finestra/i;
+        const _glassRe = /glass|vitre|vetro|vidrio|cristal|transparent/i;
         const upgradeMat = (m) => {
           if (!m) return new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.7, metalness: 0.1, side: THREE.DoubleSide });
           const sm = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide });

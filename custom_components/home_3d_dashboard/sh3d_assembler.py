@@ -41,8 +41,7 @@ _SH3D_COLORS = {
 
 _GLASS_KEYWORDS = (
     "glass", "vitre", "vetro", "vidrio",
-    "glas", "cristal", "transparent", "window",
-    "fenster", "finestra",
+    "glas", "cristal", "transparent",
 )
 
 
