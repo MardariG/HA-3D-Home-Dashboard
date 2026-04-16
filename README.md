@@ -4,7 +4,7 @@
 [![GitHub Release](https://img.shields.io/github/v/release/MardariG/HA-3D-Home-Dashboard)](https://github.com/MardariG/HA-3D-Home-Dashboard/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-An interactive 3D model dashboard for Home Assistant. Upload a GLB/GLTF model of your home and map rooms, walls, and objects to real Home Assistant entities — lights, switches, and sensors. The 3D view updates in real time based on entity states.
+An interactive 3D model dashboard for Home Assistant. Upload a Sweet Home 3D (.sh3d) model of your home and map rooms, walls, and objects to real Home Assistant entities — lights, switches, and sensors. The 3D view updates in real time based on entity states.
 
 ## Quick Install via HACS
 
@@ -14,7 +14,7 @@ Or manually: HACS → three-dot menu → **Custom repositories** → paste `http
 
 ## Features
 
-- **3D Model Upload** — drag-and-drop or browse for GLB/GLTF files
+- **3D Model Upload** — drag-and-drop or browse for Sweet Home 3D (.sh3d) files
 - **Interactive Viewer** — orbit (rotate), pan, and zoom with mouse or touch
 - **Edit Mode** — click any mesh in the 3D model to map it to a HA entity
 - **Entity Types** — supports lights, switches, and sensors
@@ -58,7 +58,7 @@ Restart Home Assistant. A new **3D Dashboard** item will appear in your sidebar.
 ## Usage
 
 1. Click **3D Dashboard** in the sidebar
-2. Upload a GLB or GLTF 3D model of your home
+2. Upload a Sweet Home 3D (.sh3d) model of your home
 3. Click **Edit Mode** in the top bar
 4. Click any mesh/object in the 3D model or in the side panel list
 5. Select a Home Assistant entity (light, switch, or sensor) from the dropdown
@@ -68,24 +68,23 @@ Restart Home Assistant. A new **3D Dashboard** item will appear in your sidebar.
 
 ## Creating a 3D Model
 
-You can create home models using:
+Create your home model using [Sweet Home 3D](http://www.sweethome3d.com/) (free, cross-platform):
 
-- **Blender** (free) — export as GLB
-- **SketchUp** — export via glTF extension
-- **Sweet Home 3D** — export via OBJ then convert to GLB
-- **Floorplanner / Homestyler** — online tools with export options
+1. Download and install Sweet Home 3D
+2. Design your home — draw walls, add rooms, place furniture and fixtures
+3. Save the project as a `.sh3d` file
+4. Upload the `.sh3d` file directly to the 3D Dashboard
 
 **Tips for best results:**
-- Name your meshes descriptively (e.g., "Living_Room", "Kitchen_Light", "Bedroom_Wall")
-- Keep mesh names unique — they're used as identifiers for entity mapping
-- Use separate meshes for rooms/objects you want to control independently
-- Optimize the model (reduce polygon count) for smooth performance
+- Name rooms and objects descriptively — they become mesh identifiers for entity mapping
+- Use separate objects for areas you want to control independently
+- Keep the model reasonably simple for smooth browser performance
 
 ## Requirements
 
 - Home Assistant 2024.1.0 or newer
 - A modern browser with WebGL support
-- A GLB or GLTF 3D model file
+- A Sweet Home 3D (.sh3d) model file
 
 ## License
 
