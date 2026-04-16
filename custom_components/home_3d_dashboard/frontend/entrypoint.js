@@ -557,7 +557,7 @@ class ThreeDHomeDashboard extends HTMLElement {
     this._scene.background = null;
 
     // --- Ground plane (flat color) ---
-    const groundGeo = new THREE.CircleGeometry(skyRadius * 0.8, 64);
+    const groundGeo = new THREE.CircleGeometry(50, 64);
     const groundMat = new THREE.MeshStandardMaterial({
       color: this._settings.groundColor || "#4a7c3f",
       roughness: 0.92,
@@ -644,7 +644,6 @@ class ThreeDHomeDashboard extends HTMLElement {
       if (this._sunSphere) this._sunSphere.visible = false;
       if (this._moonSphere) { this._moonSphere.visible = true; this._moonSphere.position.set(100, 180, -80); }
       this._clouds.forEach((c) => c.children.forEach((p) => { p.material.opacity = 0.15; }));
-      this._updateGroundColor("#1a2e1a");
     } else if (condition === "cloudy" || condition === "rainy") {
       u.topColor.value.set(0x667788);
       u.horizonColor.value.set(0x99aabb);
@@ -653,7 +652,6 @@ class ThreeDHomeDashboard extends HTMLElement {
       if (this._moonSphere) this._moonSphere.visible = false;
       const opacity = condition === "rainy" ? 0.9 : 0.8;
       this._clouds.forEach((c) => c.children.forEach((p) => { p.material.opacity = opacity; p.material.color.set(condition === "rainy" ? 0x888888 : 0xcccccc); }));
-      this._updateGroundColor(condition === "rainy" ? "#3a5a3a" : "#4a7c3f");
     } else {
       // sunny / default
       u.topColor.value.set(0x0077ff);
@@ -662,7 +660,6 @@ class ThreeDHomeDashboard extends HTMLElement {
       if (this._sunSphere) { this._sunSphere.visible = true; this._sunSphere.position.set(150, 200, -100); }
       if (this._moonSphere) this._moonSphere.visible = false;
       this._clouds.forEach((c) => c.children.forEach((p) => { p.material.opacity = 0.7; p.material.color.set(0xffffff); }));
-      this._updateGroundColor(this._settings.groundColor || "#4a7c3f");
     }
   }
 
