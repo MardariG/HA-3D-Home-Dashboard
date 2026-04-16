@@ -52,8 +52,9 @@ class OptionsFlow(config_entries.OptionsFlow):
             data_schema=vol.Schema({}),
             description_placeholders={
                 "info": (
-                    "Upload your 3D model (.glb/.gltf) "
-                    "from the 3D Dashboard panel "
+                    "Upload your Sweet Home 3D "
+                    "(.sh3d) model from the "
+                    "3D Dashboard panel "
                     "in the sidebar."
                 )
             },
