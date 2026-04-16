@@ -335,7 +335,7 @@ class ThreeDHomeDashboard extends HTMLElement {
     const bg = new THREE.Color(this._settings.bgColor);
     this._scene.background = bg;
 
-    this._camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+    this._camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.05, 2000);
     this._camera.position.set(8, 12, 8);
 
     this._renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
@@ -356,7 +356,7 @@ class ThreeDHomeDashboard extends HTMLElement {
     this._controls.rotateSpeed = 0.6;
     this._controls.zoomSpeed = 1.0;
     this._controls.minDistance = 0.5;
-    this._controls.maxDistance = 200;
+    this._controls.maxDistance = 500;
 
     this._ambientLight = new THREE.AmbientLight(0xffffff, this._settings.ambientIntensity);
     this._scene.add(this._ambientLight);
@@ -370,18 +370,18 @@ class ThreeDHomeDashboard extends HTMLElement {
     this._sunLight.shadow.mapSize.width = 2048;
     this._sunLight.shadow.mapSize.height = 2048;
     this._sunLight.shadow.camera.near = 0.5;
-    this._sunLight.shadow.camera.far = 100;
-    this._sunLight.shadow.camera.left = -30;
-    this._sunLight.shadow.camera.right = 30;
-    this._sunLight.shadow.camera.top = 30;
-    this._sunLight.shadow.camera.bottom = -30;
+    this._sunLight.shadow.camera.far = 200;
+    this._sunLight.shadow.camera.left = -60;
+    this._sunLight.shadow.camera.right = 60;
+    this._sunLight.shadow.camera.top = 60;
+    this._sunLight.shadow.camera.bottom = -60;
     this._scene.add(this._sunLight);
 
     const fillLight = new THREE.DirectionalLight(0xffeedd, 0.3);
     fillLight.position.set(-10, 8, -10);
     this._scene.add(fillLight);
 
-    this._gridHelper = new THREE.GridHelper(50, 50, 0x333355, 0x222244);
+    this._gridHelper = new THREE.GridHelper(100, 100, 0x333355, 0x222244);
     this._gridHelper.material.opacity = 0.3;
     this._gridHelper.material.transparent = true;
     this._scene.add(this._gridHelper);
@@ -409,8 +409,9 @@ class ThreeDHomeDashboard extends HTMLElement {
     const box = new THREE.Box3().setFromObject(this._model);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
-    const d = Math.max(size.x, size.y, size.z) * 1.5;
-    this._camera.position.set(center.x + d * 0.7, center.y + d * 0.9, center.z + d * 0.7);
+    const diag = Math.sqrt(size.x * size.x + size.y * size.y + size.z * size.z);
+    const d = Math.max(diag * 1.4, 8);
+    this._camera.position.set(center.x + d * 0.5, center.y + d * 0.9, center.z + d * 0.5);
     this._controls.target.copy(center);
     this._controls.update();
   }
