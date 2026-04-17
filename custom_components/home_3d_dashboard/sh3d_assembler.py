@@ -203,6 +203,13 @@ def assemble_sh3d(zip_path, output_dir):
             "t": float(
                 elem.get("thickness", 7.5)
             ),
+            "leftColor": elem.get(
+                "leftSideColor"
+            ),
+            "rightColor": elem.get(
+                "rightSideColor"
+            ),
+            "topColor": elem.get("topColor"),
         })
 
     _LOGGER.info(
@@ -635,6 +642,24 @@ def assemble_sh3d(zip_path, output_dir):
         "illum 2",
     ]
 
+    def _color_to_mtl(color_str, mtl_name):
+        """Convert SH3D integer color to MTL material."""
+        try:
+            ci = int(color_str)
+            r = ((ci >> 16) & 0xFF) / 255.0
+            g = ((ci >> 8) & 0xFF) / 255.0
+            b = (ci & 0xFF) / 255.0
+            all_materials[mtl_name] = [
+                f"Ka {r*0.3:.4f} {g*0.3:.4f} {b*0.3:.4f}",
+                f"Kd {r:.4f} {g:.4f} {b:.4f}",
+                "Ks 0.05 0.05 0.05",
+                "Ns 10",
+                "illum 2",
+            ]
+            return True
+        except (ValueError, TypeError):
+            return False
+
     # Collect door/window openings (in cm)
     openings = []
     for item in items:
@@ -764,20 +789,33 @@ def assemble_sh3d(zip_path, output_dir):
         ny = ux * t / 2
 
         # Find openings on this wall
+        wall_angle = math.atan2(dy, dx)
         wall_holes = []
         for op in openings:
             ox = op["x"] / 100
             oy = op["y"] / 100
+            # Check angle alignment (opening should be
+            # parallel to wall, within ~25 degrees)
+            oa = op["angle"]
+            angle_diff = abs(wall_angle - oa) % math.pi
+            if angle_diff > 0.45 and angle_diff < (math.pi - 0.45):
+                continue
             dist, proj_t = _point_to_segment_dist(
                 ox, oy, xs, ys, xe, ye
             )
-            if dist > t * 1.2:
+            # Use max of wall thickness and opening depth
+            od = op["depth"] / 100
+            max_dist = max(t, od) * 0.7
+            if dist > max_dist:
                 continue
-            # Opening sits on this wall
+            # Check projection is within wall segment
+            # (with tolerance for opening half-width)
             ow = op["width"] / 100
             oh = op["height"] / 100
             oe = op["elevation"] / 100
-            # Position along wall in meters
+            # Check elevation overlap with wall
+            if oe >= h or oe + oh <= 0:
+                continue
             pos_along = proj_t * length
             half_w = ow / 2
             wall_holes.append((
@@ -787,8 +825,24 @@ def assemble_sh3d(zip_path, output_dir):
                 oe + oh,
             ))
 
+        # Per-wall materials from Home.xml colors
+        left_mtl = wall_mtl_name
+        right_mtl = wall_mtl_name
+        top_mtl = wall_mtl_name
+        if w.get("leftColor"):
+            lm = f"wall_{wi}_left"
+            if _color_to_mtl(w["leftColor"], lm):
+                left_mtl = lm
+        if w.get("rightColor"):
+            rm = f"wall_{wi}_right"
+            if _color_to_mtl(w["rightColor"], rm):
+                right_mtl = rm
+        if w.get("topColor"):
+            tm = f"wall_{wi}_top"
+            if _color_to_mtl(w["topColor"], tm):
+                top_mtl = tm
+
         out_lines.append(f"g Wall_{wi}\n")
-        out_lines.append(f"usemtl {wall_mtl_name}\n")
 
         if not wall_holes:
             # Simple solid wall (no openings)
@@ -809,26 +863,49 @@ def assemble_sh3d(zip_path, output_dir):
                     f" {v[2]:.4f}\n"
                 )
             b = vo + 1
-            wall_faces = [
-                (0, 1, 5, 4),
-                (2, 3, 7, 6),
-                (4, 5, 6, 7),
-                (0, 3, 2, 1),
-                (0, 4, 7, 3),
-                (1, 2, 6, 5),
-            ]
-            for face in wall_faces:
-                out_lines.append(
-                    f"f {b+face[0]}"
-                    f" {b+face[1]}"
-                    f" {b+face[2]}"
-                    f" {b+face[3]}\n"
-                )
+            # Left side (front face)
+            out_lines.append(
+                f"usemtl {left_mtl}\n"
+            )
+            out_lines.append(
+                f"f {b} {b+1} {b+5} {b+4}\n"
+            )
+            # Right side (back face)
+            out_lines.append(
+                f"usemtl {right_mtl}\n"
+            )
+            out_lines.append(
+                f"f {b+2} {b+3} {b+7} {b+6}\n"
+            )
+            # Top
+            out_lines.append(
+                f"usemtl {top_mtl}\n"
+            )
+            out_lines.append(
+                f"f {b+4} {b+5} {b+6} {b+7}\n"
+            )
+            # Bottom
+            out_lines.append(
+                f"usemtl {wall_mtl_name}\n"
+            )
+            out_lines.append(
+                f"f {b} {b+3} {b+2} {b+1}\n"
+            )
+            # End caps
+            out_lines.append(
+                f"f {b} {b+4} {b+7} {b+3}\n"
+            )
+            out_lines.append(
+                f"f {b+1} {b+2} {b+6} {b+5}\n"
+            )
             vo += 8
         else:
             # Wall with openings - generate faces with holes
             vc = 0
-            # Front face (negative normal side)
+            # Front face (left side)
+            out_lines.append(
+                f"usemtl {left_mtl}\n"
+            )
             fv, ff = _wall_face_with_holes(
                 xs - nx, ys - ny,
                 xe - nx, ye - ny,
@@ -849,7 +926,10 @@ def assemble_sh3d(zip_path, output_dir):
                 )
             vc += len(fv)
 
-            # Back face (positive normal side, reversed)
+            # Back face (right side, reversed)
+            out_lines.append(
+                f"usemtl {right_mtl}\n"
+            )
             bv, bf = _wall_face_with_holes(
                 xs + nx, ys + ny,
                 xe + nx, ye + ny,
@@ -872,6 +952,9 @@ def assemble_sh3d(zip_path, output_dir):
             vc += len(bv)
 
             # Top face
+            out_lines.append(
+                f"usemtl {top_mtl}\n"
+            )
             tv = [
                 (xs - nx, h, ys - ny),
                 (xs + nx, h, ys + ny),
@@ -890,7 +973,10 @@ def assemble_sh3d(zip_path, output_dir):
             )
             vc += 4
 
-            # Bottom face
+            # Bottom face + end caps
+            out_lines.append(
+                f"usemtl {wall_mtl_name}\n"
+            )
             bv2 = [
                 (xs - nx, 0, ys - ny),
                 (xe - nx, 0, ye - ny),
