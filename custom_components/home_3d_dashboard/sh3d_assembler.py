@@ -39,48 +39,6 @@ _SH3D_COLORS = {
 
 
 
-_GLASS_KEYWORDS = (
-    "glass", "vitre", "vetro", "vidrio",
-    "glas", "cristal", "transparent",
-)
-
-
-def _is_glass_material(name):
-    """Check if material name suggests glass/transparent."""
-    low = name.lower()
-    return any(kw in low for kw in _GLASS_KEYWORDS)
-
-
-def _looks_like_glass_color(mat_lines):
-    """Check if material has very dark neutral Kd and no
-    texture maps (likely glass pane, not frame)."""
-    has_texture = any(
-        ln.strip().split()[0] in (
-            'map_Kd', 'map_Ka', 'map_Ks',
-        )
-        for ln in mat_lines
-        if ln.strip().split()
-    )
-    if has_texture:
-        return False
-    for line in mat_lines:
-        parts = line.strip().split()
-        if len(parts) >= 4 and parts[0] == 'Kd':
-            try:
-                r, g, b = (
-                    float(parts[1]),
-                    float(parts[2]),
-                    float(parts[3]),
-                )
-                avg = (r + g + b) / 3
-                spread = max(r, g, b) - min(r, g, b)
-                # Very dark and neutral only
-                if avg < 0.15 and spread < 0.1:
-                    return True
-            except ValueError:
-                pass
-    return False
-
 
 def _manual_extract(zip_path, dest_dir):
     """Extract SH3D ZIP handling Java-serialized Home entry."""
@@ -261,6 +219,8 @@ def assemble_sh3d(zip_path, output_dir):
         faces = []
         mtl_file = None
         cur_mtl = None
+        cur_group = None
+        window_pane_groups = set()
         if not os.path.exists(path):
             return None
         with open(path, 'r', errors='ignore') as f:
@@ -298,18 +258,38 @@ def assemble_sh3d(zip_path, output_dir):
                             ni = int(idx[2])
                         face.append((vi, ti, ni))
                     faces.append((cur_mtl, face))
+                    # Track which materials belong
+                    # to window pane groups
+                    if cur_group and cur_group in window_pane_groups and cur_mtl:
+                        window_pane_groups.add(
+                            "mtl:" + cur_mtl
+                        )
+                elif p[0] == 'g' or p[0] == 'o':
+                    cur_group = ' '.join(p[1:])
+                    if cur_group.startswith(
+                        "sweethome3d_window_pane"
+                    ):
+                        window_pane_groups.add(
+                            cur_group
+                        )
                 elif p[0] == 'mtllib':
                     mtl_file = ' '.join(p[1:])
                 elif p[0] == 'usemtl':
                     cur_mtl = ' '.join(p[1:])
         if not verts:
             return None
+        # Extract material names that are window panes
+        pane_materials = set()
+        for item in window_pane_groups:
+            if item.startswith("mtl:"):
+                pane_materials.add(item[4:])
         return {
             "v": verts,
             "vn": norms,
             "vt": texcs,
             "f": faces,
             "mtl_file": mtl_file,
+            "pane_materials": pane_materials,
         }
 
     def parse_mtl(path):
@@ -400,10 +380,7 @@ def assemble_sh3d(zip_path, output_dir):
         if not obj:
             continue
 
-        raw_name = item["name"]
-        if item["tag"] == "doorOrWindow":
-            raw_name = "DW__" + raw_name
-        gname = make_unique(raw_name)
+        gname = make_unique(item["name"])
         prefix = gname + "__"
 
         # --- Materials ---
@@ -494,6 +471,24 @@ def assemble_sh3d(zip_path, output_dir):
                 mtl_map["__default__"] = mname
             except Exception:
                 pass
+
+        # --- Window pane transparency ---
+        pane_mats = obj.get("pane_materials", set())
+        if pane_mats:
+            for orig_name in pane_mats:
+                mapped = mtl_map.get(orig_name)
+                if mapped and mapped in all_materials:
+                    mlines = all_materials[mapped]
+                    has_d = any(
+                        ln.strip().startswith('d ')
+                        for ln in mlines
+                    )
+                    if not has_d:
+                        mlines.append("d 0.5")
+                    _LOGGER.debug(
+                        "Window pane: %s -> %s",
+                        orig_name, mapped,
+                    )
 
         # --- Geometry transforms ---
         verts = [v[:] for v in obj["v"]]

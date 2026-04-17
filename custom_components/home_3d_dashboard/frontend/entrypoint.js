@@ -343,34 +343,6 @@ class ThreeDHomeDashboard extends HTMLElement {
         }
       }
     });
-    // --- Glass detection for door/window meshes (DW__ prefix) ---
-    obj.traverse((c) => {
-      if (!c.isMesh) return;
-      // Walk up to find group name
-      let groupName = c.name || "";
-      let p = c.parent;
-      while (p && !groupName.startsWith("DW__")) {
-        groupName = p.name || "";
-        p = p.parent;
-      }
-      if (!groupName.startsWith("DW__")) return;
-      const makeGlass = (mat) => {
-        if (!mat || mat.transparent || mat.map) return;
-        const col = mat.color;
-        if (!col) return;
-        const brightness = col.r * 0.299 + col.g * 0.587 + col.b * 0.114;
-        if (brightness < 0.25) {
-          mat.opacity = 0.25;
-          mat.transparent = true;
-          mat.depthWrite = false;
-          mat.color.set(0x88bbdd);
-          mat.roughness = 0.05;
-          mat.metalness = 0.1;
-        }
-      };
-      if (Array.isArray(c.material)) c.material.forEach(makeGlass);
-      else makeGlass(c.material);
-    });
     return obj;
   }
 
