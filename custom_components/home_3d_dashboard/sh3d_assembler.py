@@ -52,16 +52,30 @@ def _is_glass_material(name):
 
 
 def _looks_like_glass_color(mat_lines):
-    """Check if material has dark neutral Kd (likely glass)."""
+    """Check if material has very dark neutral Kd and no
+    texture maps (likely glass pane, not frame)."""
+    has_texture = any(
+        ln.strip().split()[0] in (
+            'map_Kd', 'map_Ka', 'map_Ks',
+        )
+        for ln in mat_lines
+        if ln.strip().split()
+    )
+    if has_texture:
+        return False
     for line in mat_lines:
         parts = line.strip().split()
         if len(parts) >= 4 and parts[0] == 'Kd':
             try:
-                r, g, b = float(parts[1]), float(parts[2]), float(parts[3])
-                # Dark and neutral = likely glass
+                r, g, b = (
+                    float(parts[1]),
+                    float(parts[2]),
+                    float(parts[3]),
+                )
                 avg = (r + g + b) / 3
                 spread = max(r, g, b) - min(r, g, b)
-                if avg < 0.45 and spread < 0.15:
+                # Very dark and neutral only
+                if avg < 0.15 and spread < 0.1:
                     return True
             except ValueError:
                 pass
@@ -386,7 +400,10 @@ def assemble_sh3d(zip_path, output_dir):
         if not obj:
             continue
 
-        gname = make_unique(item["name"])
+        raw_name = item["name"]
+        if item["tag"] == "doorOrWindow":
+            raw_name = "DW__" + raw_name
+        gname = make_unique(raw_name)
         prefix = gname + "__"
 
         # --- Materials ---
@@ -434,14 +451,6 @@ def assemble_sh3d(zip_path, output_dir):
                                 new_lines.append(ml)
                         else:
                             new_lines.append(ml)
-                    # Add transparency for glass materials
-                    if _is_glass_material(mname):
-                        has_d = any(
-                            ln.strip().startswith('d ')
-                            for ln in new_lines
-                        )
-                        if not has_d:
-                            new_lines.append("d 0.3")
                     all_materials[new_name] = new_lines
 
         # Handle standalone OBJ materials (no mtllib but has usemtl)
@@ -463,8 +472,6 @@ def assemble_sh3d(zip_path, output_dir):
                     f"Ns 20",
                     f"illum 2",
                 ]
-                if _is_glass_material(sm):
-                    mat_lines.append("d 0.3")
                 all_materials[new_name] = mat_lines
 
         # Override color from XML if set
@@ -487,32 +494,6 @@ def assemble_sh3d(zip_path, output_dir):
                 mtl_map["__default__"] = mname
             except Exception:
                 pass
-
-        # --- Glass detection for doorOrWindow items ---
-        if item["tag"] == "doorOrWindow":
-            for old_name, new_name in mtl_map.items():
-                if new_name in all_materials:
-                    mlines = all_materials[new_name]
-                    has_d = any(
-                        ln.strip().startswith('d ')
-                        for ln in mlines
-                    )
-                    if not has_d:
-                        is_glass = (
-                            _is_glass_material(old_name)
-                            or _looks_like_glass_color(mlines)
-                        )
-                        if is_glass:
-                            mlines.append("d 0.25")
-                            # Make glass slightly blue-tinted
-                            # Replace Kd with light blue
-                            all_materials[new_name] = [
-                                ln for ln in mlines
-                                if not ln.strip().startswith('Kd ')
-                            ]
-                            all_materials[new_name].append(
-                                "Kd 0.65 0.78 0.88"
-                            )
 
         # --- Geometry transforms ---
         verts = [v[:] for v in obj["v"]]

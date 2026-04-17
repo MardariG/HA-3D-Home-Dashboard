@@ -324,26 +324,14 @@ class ThreeDHomeDashboard extends HTMLElement {
     });
     obj.traverse((c) => {
       if (c.isMesh) {
-        const _glassRe = /glass|vitre|vetro|vidrio|cristal|transparent/i;
         const upgradeMat = (m) => {
           if (!m) return new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.7, metalness: 0.1, side: THREE.DoubleSide });
           const sm = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide });
           if (m.color) sm.color = m.color;
           if (m.map) sm.map = m.map;
           if (m.opacity < 1) { sm.opacity = m.opacity; sm.transparent = true; }
-          // Detect glass by material name
-          const mName = m.name || "";
-          const isGlass = !sm.transparent && _glassRe.test(mName);
-          if (isGlass) {
-            sm.opacity = 0.3;
-            sm.transparent = true;
-            sm.color.set(0xaaccee);
-            sm.roughness = 0.05;
-            sm.metalness = 0.1;
-          } else {
-            sm.roughness = m.shininess ? 1.0 - Math.min(m.shininess / 150, 0.85) : 0.7;
-            sm.metalness = m.specular ? Math.min((m.specular.r + m.specular.g + m.specular.b) / 3, 0.5) : 0.05;
-          }
+          sm.roughness = m.shininess ? 1.0 - Math.min(m.shininess / 150, 0.85) : 0.7;
+          sm.metalness = m.specular ? Math.min((m.specular.r + m.specular.g + m.specular.b) / 3, 0.5) : 0.05;
           return sm;
         };
         if (!materials) {
@@ -354,6 +342,34 @@ class ThreeDHomeDashboard extends HTMLElement {
           c.material = upgradeMat(c.material);
         }
       }
+    });
+    // --- Glass detection for door/window meshes (DW__ prefix) ---
+    obj.traverse((c) => {
+      if (!c.isMesh) return;
+      // Walk up to find group name
+      let groupName = c.name || "";
+      let p = c.parent;
+      while (p && !groupName.startsWith("DW__")) {
+        groupName = p.name || "";
+        p = p.parent;
+      }
+      if (!groupName.startsWith("DW__")) return;
+      const makeGlass = (mat) => {
+        if (!mat || mat.transparent || mat.map) return;
+        const col = mat.color;
+        if (!col) return;
+        const brightness = col.r * 0.299 + col.g * 0.587 + col.b * 0.114;
+        if (brightness < 0.25) {
+          mat.opacity = 0.25;
+          mat.transparent = true;
+          mat.depthWrite = false;
+          mat.color.set(0x88bbdd);
+          mat.roughness = 0.05;
+          mat.metalness = 0.1;
+        }
+      };
+      if (Array.isArray(c.material)) c.material.forEach(makeGlass);
+      else makeGlass(c.material);
     });
     return obj;
   }
