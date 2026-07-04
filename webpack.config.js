@@ -21,16 +21,55 @@
  *      the vendor scripts using `scriptLoading: 'blocking'`.
  */
 
+const fs = require('fs');
 const path = require('path');
 const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+const { minify } = require('terser');
+
+// Minifies the legacy engine scripts while copying them (the JSweet output
+// SweetHome3D.js alone is 3.9 MB unminified). keep_fnames is REQUIRED:
+// HomeRecorder maps content types through constructor.name, and other code
+// relies on function-name reflection. Global (top-level) names are never
+// mangled by terser for plain scripts, which these are.
+const TERSER_OPTIONS = { keep_fnames: true, format: { comments: false } };
+
+function minifyEngineScript(content, absoluteFrom) {
+  if (!/\.js$/i.test(absoluteFrom) || /\.min\.js$/i.test(absoluteFrom)) {
+    return content;
+  }
+  return minify(content.toString(), TERSER_OPTIONS).then(function (result) {
+    return result.code;
+  });
+}
+
+// The save worker (see HomeRecorder.writeHomeToZip) imports one script from
+// a <script id="recorder-worker"> tag: a plain-script concatenation of
+// URLContent.js + HomeRecorder.js, plus the zip download deduplication
+// (workers have their own ZIPTools instance with the same thundering-herd
+// flaw the pages had). zipDedupe.js is an ES module; stripping its `export`
+// keyword makes it a plain script the worker can run.
+function buildRecorderWorker(isProd) {
+  const parts = ['public/src/URLContent.js', 'public/src/HomeRecorder.js']
+    .map(function (file) {
+      return fs.readFileSync(path.resolve(__dirname, file), 'utf8');
+    });
+  parts.push(
+    fs.readFileSync(path.resolve(__dirname, 'src/zipDedupe.js'), 'utf8')
+      .replace(/^export /m, '')
+    + '\ninstallZipRequestDeduplication();\n');
+  const code = parts.join('\n;\n');
+  return isProd
+    ? minify(code, TERSER_OPTIONS).then(function (result) { return result.code; })
+    : code;
+}
 
 module.exports = (env, argv) => {
   const isProd = argv.mode === 'production';
   // `npm run build:ha` (--env ha) targets the Home Assistant integration:
-  // output goes into custom_components/sweethome3d/frontend/ and the editor
-  // is wired to the integration's /api/sweethome3d/* endpoints.
+  // output goes into custom_components/home_3d_dashboard/frontend/ and the
+  // editor is wired to the integration's /api/home_3d_dashboard/* endpoints.
   const isHA = !!(env && env.ha);
   const outputDir = isHA
     ? path.resolve(__dirname, 'custom_components/home_3d_dashboard/frontend')
@@ -52,7 +91,9 @@ module.exports = (env, argv) => {
       publicPath: ''
     },
 
-    devtool: isProd ? 'source-map' : 'eval-cheap-module-source-map',
+    // No source maps in the HA build: they double the shipped payload and
+    // are only useful when debugging the standalone build locally.
+    devtool: isHA ? false : (isProd ? 'source-map' : 'eval-cheap-module-source-map'),
 
     module: {
       rules: [
@@ -85,8 +126,16 @@ module.exports = (env, argv) => {
       }),
       new CopyWebpackPlugin({
         patterns: [
-          { from: 'public/vendor', to: 'vendor' },
-          { from: 'public/src',    to: 'src' },
+          { from: 'public/vendor', to: 'vendor',
+            transform: isProd ? { transformer: minifyEngineScript, cache: true } : undefined },
+          { from: 'public/src',    to: 'src',
+            transform: isProd ? { transformer: minifyEngineScript, cache: true } : undefined },
+          // Concatenated worker script for background saves; the file used
+          // as `from` is just a placeholder to hook transform into the copy.
+          // No transform cache: the output depends on URLContent.js and
+          // HomeRecorder.js, which the cache key (placeholder file) misses.
+          { from: 'src/zipDedupe.js', to: 'src/recorder-worker.js',
+            transform: function () { return buildRecorderWorker(isProd); } },
           { from: 'public/lib',    to: 'lib',    noErrorOnMissing: true },
           { from: 'public/assets', to: 'assets', noErrorOnMissing: true },
           // Default furniture catalog 3D models + thumbnails. The catalog

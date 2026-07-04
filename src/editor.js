@@ -67,7 +67,9 @@ function initEditor() {
     // the editor re-downloads on every open, since readHome cache-busts with
     // an editionId query parameter).
     compressionLevel: 5,
-    writeHomeWithWorker: false,
+    // Zip + deflate on a worker thread so saving doesn't freeze the UI.
+    // The worker imports src/recorder-worker.js (see editor.html).
+    writeHomeWithWorker: true,
     autoRecovery: false
   };
 

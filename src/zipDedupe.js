@@ -14,7 +14,10 @@
  * <body> with blocking loading, so that ordering holds for both pages).
  */
 export function installZipRequestDeduplication() {
-  var ZIPTools = window.ZIPTools;
+  // window in pages, self in the recorder worker (see webpack.config.js,
+  // which strips the `export` keyword to reuse this file in the worker)
+  var globalScope = typeof window !== 'undefined' ? window : self;
+  var ZIPTools = globalScope.ZIPTools;
   if (!ZIPTools || ZIPTools.__dedupeInstalled) {
     return;
   }

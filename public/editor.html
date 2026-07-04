@@ -55,6 +55,11 @@
 <script type="text/javascript" src="src/UserPreferences.js"></script>
 <script type="text/javascript" src="src/ContentDigestManager.js"></script>
 <script type="text/javascript" src="src/HomeRecorder.js"></script>
+<!-- Not executed in the page (non-JS type): HomeRecorder reads this tag's
+     src to know which script the background save worker should import.
+     The file is generated at build time (URLContent + HomeRecorder + zip
+     download deduplication), see webpack.config.js. -->
+<script type="text/js-worker" id="recorder-worker" src="src/recorder-worker.js"></script>
 
 <script type="text/javascript" src="src/graphics2d.js"></script>
 <script type="text/javascript" src="src/ResourceAction.js"></script>
