@@ -9,74 +9,20 @@
   <title>Sweet Home 3D — Web Editor</title>
 
   <!--
-    Sweet Home 3D vendor + hand-written + transpiled scripts.
-    These MUST be loaded in this order, BEFORE the webpack bundle, because they
-    expose the globals (SweetHome3DJSApplication, ZIPTools, Home, HomePane, ...)
-    that our entry script relies on.
-
-    Load order mirrors build.xml "applicationConcat" target + test/testHome.html.
-    CopyWebpackPlugin copies vendor/ and src/ from public/ into dist/ at build.
+    Sweet Home 3D engine scripts. The ordered list lives in webpack.config.js
+    (EDITOR_SCRIPTS, mirroring build.xml "applicationConcat"): individual
+    files in dev builds, vendor/jszip.min.js + the concatenated editor-lib.js
+    in production. They MUST run BEFORE the webpack bundle, because they
+    expose the globals (SweetHome3DJSApplication, ZIPTools, Home, HomePane,
+    ...) it relies on.
   -->
-<script type="text/javascript" src="vendor/big.min.js"></script>
-<script type="text/javascript" src="vendor/gl-matrix-min.js"></script>
-<script type="text/javascript" src="vendor/jszip.min.js"></script>
-<script type="text/javascript" src="vendor/jsXmlSaxParser.min.js"></script>
-
-<script type="text/javascript" src="src/core.js"></script>
-<script type="text/javascript" src="src/scene3d.js"></script>
-<script type="text/javascript" src="src/HTMLCanvas3D.js"></script>
-<script type="text/javascript" src="src/URLContent.js"></script>
-<script type="text/javascript" src="src/ModelLoader.js"></script>
-<script type="text/javascript" src="src/Triangulator.js"></script>
-<script type="text/javascript" src="src/OBJLoader.js"></script>
-<script type="text/javascript" src="src/DAELoader.js"></script>
-<script type="text/javascript" src="src/Max3DSLoader.js"></script>
-<script type="text/javascript" src="src/ModelManager.js"></script>
-<script type="text/javascript" src="src/ModelPreviewComponent.js"></script>
-
-<script type="text/javascript" src="vendor/geom.js"></script>
-<script type="text/javascript" src="vendor/stroke.min.js"></script>
-<script type="text/javascript" src="vendor/swingundo.js"></script>
-<script type="text/javascript" src="vendor/batik-svgpathparser.js"></script>
-<script type="text/javascript" src="src/CoreTools.js"></script>
-<script type="text/javascript" src="vendor/SweetHome3D.js"></script>
-<script type="text/javascript" src="src/ShapeTools.js"></script>
-<script type="text/javascript" src="src/HomeComponent3D.js"></script>
-<script type="text/javascript" src="src/Object3DBranch.js"></script>
-<script type="text/javascript" src="src/HomePieceOfFurniture3D.js"></script>
-<script type="text/javascript" src="src/Room3D.js"></script>
-<script type="text/javascript" src="src/Wall3D.js"></script>
-<script type="text/javascript" src="src/Ground3D.js"></script>
-<script type="text/javascript" src="src/Polyline3D.js"></script>
-<script type="text/javascript" src="src/DimensionLine3D.js"></script>
-<script type="text/javascript" src="src/Label3D.js"></script>
-<script type="text/javascript" src="src/TextureManager.js"></script>
-<script type="text/javascript" src="src/LengthUnit.js"></script>
-<script type="text/javascript" src="src/UserPreferences.js"></script>
-<script type="text/javascript" src="src/ContentDigestManager.js"></script>
-<script type="text/javascript" src="src/HomeRecorder.js"></script>
+<% engineScripts.forEach(function(script) { %><script type="text/javascript" src="<%= script %>"></script>
+<% }); %>
 <!-- Not executed in the page (non-JS type): HomeRecorder reads this tag's
      src to know which script the background save worker should import.
      The file is generated at build time (URLContent + HomeRecorder + zip
      download deduplication), see webpack.config.js. -->
-<script type="text/js-worker" id="recorder-worker" src="src/recorder-worker.js"></script>
-
-<script type="text/javascript" src="src/graphics2d.js"></script>
-<script type="text/javascript" src="src/ResourceAction.js"></script>
-<script type="text/javascript" src="src/toolkit.js"></script>
-<script type="text/javascript" src="src/PlanComponent.js"></script>
-<script type="text/javascript" src="src/HomePane.js"></script>
-<script type="text/javascript" src="src/DefaultFurnitureCatalog.js"></script>
-<script type="text/javascript" src="src/DefaultTexturesCatalog.js"></script>
-<script type="text/javascript" src="src/FurnitureCatalogListPanel.js"></script>
-<script type="text/javascript" src="src/FurnitureTablePanel.js"></script>
-<script type="text/javascript" src="src/ColorButton.js"></script>
-<script type="text/javascript" src="src/TextureChoiceComponent.js"></script>
-<script type="text/javascript" src="src/ModelMaterialsComponent.js"></script>
-<script type="text/javascript" src="src/JSViewFactory.js"></script>
-<script type="text/javascript" src="src/DirectHomeRecorder.js"></script>
-<script type="text/javascript" src="src/IncrementalHomeRecorder.js"></script>
-<script type="text/javascript" src="src/SweetHome3DJSApplication.js"></script>
+<script type="text/js-worker" id="recorder-worker" src="recorder-worker.js"></script>
 <link rel="stylesheet" type="text/css" href="vendor/sweethome3djs.css">
 <style type="text/css">
 

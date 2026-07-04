@@ -6,24 +6,14 @@
   <title>Sweet Home 3D — Web Viewer</title>
 
   <!--
-    Sweet Home 3D vendor + transpiled scripts.
-    These MUST be loaded in this order, and BEFORE the webpack bundle, because
-    they expose the globals (`viewHome`, `HomeRecorder`, `Node3D`, ...) that
-    our entry script relies on.
-
-    CopyWebpackPlugin copies them from /public/vendor to /dist/vendor at build.
+    Sweet Home 3D engine scripts. The ordered list lives in
+    webpack.config.js (VIEWER_SCRIPTS): individual files in dev builds,
+    vendor/jszip.min.js + the concatenated viewer-lib.js in production.
+    They MUST run BEFORE the webpack bundle, because they expose the
+    globals (`viewHome`, `HomeRecorder`, `Node3D`, ...) it relies on.
   -->
-  <script defer src="vendor/big.min.js"></script>
-  <script defer src="vendor/gl-matrix-min.js"></script>
-  <script defer src="vendor/jszip.min.js"></script>
-  <script defer src="vendor/core.min.js"></script>
-  <script defer src="vendor/geom.min.js"></script>
-  <script defer src="vendor/stroke.min.js"></script>
-  <script defer src="vendor/batik-svgpathparser.min.js"></script>
-  <script defer src="vendor/jsXmlSaxParser.min.js"></script>
-  <script defer src="vendor/triangulator.min.js"></script>
-  <script defer src="vendor/viewmodel.min.js"></script>
-  <script defer src="vendor/viewhome.min.js"></script>
+  <% engineScripts.forEach(function(script) { %><script defer src="<%= script %>"></script>
+  <% }); %>
 </head>
 <body>
 

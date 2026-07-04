@@ -44,6 +44,95 @@ function minifyEngineScript(content, absoluteFrom) {
   });
 }
 
+// Engine scripts of each page, in the exact order the upstream build loads
+// them (legacy global scripts: order is load-bearing). In production the
+// whole list (minus jszip, see below) is concatenated into ONE file per
+// page to collapse the request waterfall: 52 blocking round-trips hurt on
+// remote Home Assistant access even when every response is a 304.
+//
+// vendor/jszip.min.js stays a real <script> tag in both pages:
+// ZIPTools.getScriptFolder() locates the vendor folder by finding that tag
+// and half the UI resolves its images/cursors/resources relative to it.
+const VIEWER_SCRIPTS = [
+  'vendor/big.min.js',
+  'vendor/gl-matrix-min.js',
+  'vendor/jszip.min.js',
+  'vendor/core.min.js',
+  'vendor/geom.min.js',
+  'vendor/stroke.min.js',
+  'vendor/batik-svgpathparser.min.js',
+  'vendor/jsXmlSaxParser.min.js',
+  'vendor/triangulator.min.js',
+  'vendor/viewmodel.min.js',
+  'vendor/viewhome.min.js'
+];
+const EDITOR_SCRIPTS = [
+  'vendor/big.min.js',
+  'vendor/gl-matrix-min.js',
+  'vendor/jszip.min.js',
+  'vendor/jsXmlSaxParser.min.js',
+  'src/core.js',
+  'src/scene3d.js',
+  'src/HTMLCanvas3D.js',
+  'src/URLContent.js',
+  'src/ModelLoader.js',
+  'src/Triangulator.js',
+  'src/OBJLoader.js',
+  'src/DAELoader.js',
+  'src/Max3DSLoader.js',
+  'src/ModelManager.js',
+  'src/ModelPreviewComponent.js',
+  'vendor/geom.js',
+  'vendor/stroke.min.js',
+  'vendor/swingundo.js',
+  'vendor/batik-svgpathparser.js',
+  'src/CoreTools.js',
+  'vendor/SweetHome3D.js',
+  'src/ShapeTools.js',
+  'src/HomeComponent3D.js',
+  'src/Object3DBranch.js',
+  'src/HomePieceOfFurniture3D.js',
+  'src/Room3D.js',
+  'src/Wall3D.js',
+  'src/Ground3D.js',
+  'src/Polyline3D.js',
+  'src/DimensionLine3D.js',
+  'src/Label3D.js',
+  'src/TextureManager.js',
+  'src/LengthUnit.js',
+  'src/UserPreferences.js',
+  'src/ContentDigestManager.js',
+  'src/HomeRecorder.js',
+  'src/graphics2d.js',
+  'src/ResourceAction.js',
+  'src/toolkit.js',
+  'src/PlanComponent.js',
+  'src/HomePane.js',
+  'src/DefaultFurnitureCatalog.js',
+  'src/DefaultTexturesCatalog.js',
+  'src/FurnitureCatalogListPanel.js',
+  'src/FurnitureTablePanel.js',
+  'src/ColorButton.js',
+  'src/TextureChoiceComponent.js',
+  'src/ModelMaterialsComponent.js',
+  'src/JSViewFactory.js',
+  'src/DirectHomeRecorder.js',
+  'src/IncrementalHomeRecorder.js',
+  'src/SweetHome3DJSApplication.js'
+];
+
+function concatEngineScripts(scripts, isProd) {
+  const code = scripts
+    .filter(function (file) { return file !== 'vendor/jszip.min.js'; })
+    .map(function (file) {
+      return fs.readFileSync(path.resolve(__dirname, 'public', file), 'utf8');
+    })
+    .join('\n;\n');
+  return isProd
+    ? minify(code, TERSER_OPTIONS).then(function (result) { return result.code; })
+    : code;
+}
+
 // The save worker (see HomeRecorder.writeHomeToZip) imports one script from
 // a <script id="recorder-worker"> tag: a plain-script concatenation of
 // URLContent.js + HomeRecorder.js, plus the zip download deduplication
@@ -55,6 +144,25 @@ function buildRecorderWorker(isProd) {
     .map(function (file) {
       return fs.readFileSync(path.resolve(__dirname, file), 'utf8');
     });
+  // Blob workers have a non-hierarchical base URL (blob:...), so an
+  // XMLHttpRequest to a relative URL like /api/... throws "Invalid URL".
+  // Content URLs are server-relative (/api/, /com/); resolve them against
+  // the page origin, which the blob URL of the worker itself carries.
+  parts.push(
+    '(function() {\n' +
+    '  var base = self.location.href;\n' +
+    '  if (base.indexOf("blob:") === 0) { base = base.substring(5); }\n' +
+    '  var origin = new URL(base).origin;\n' +
+    '  var originalOpen = XMLHttpRequest.prototype.open;\n' +
+    '  XMLHttpRequest.prototype.open = function(method, url, async, user, password) {\n' +
+    '    if (typeof url === "string" && url.indexOf("://") < 0\n' +
+    '        && url.indexOf("data:") !== 0 && url.indexOf("blob:") !== 0) {\n' +
+    '      url = new URL(url, origin).href;\n' +
+    '    }\n' +
+    '    return originalOpen.call(this, method, url,\n' +
+    '        async === undefined ? true : async, user, password);\n' +
+    '  };\n' +
+    '})();\n');
   parts.push(
     fs.readFileSync(path.resolve(__dirname, 'src/zipDedupe.js'), 'utf8')
       .replace(/^export /m, '')
@@ -115,14 +223,24 @@ module.exports = (env, argv) => {
         filename: 'index.html',
         chunks: ['viewer'],
         inject: 'body',
-        scriptLoading: 'blocking'
+        scriptLoading: 'blocking',
+        templateParameters: {
+          engineScripts: isProd
+            ? ['vendor/jszip.min.js', 'viewer-lib.js']
+            : VIEWER_SCRIPTS
+        }
       }),
       new HtmlWebpackPlugin({
         template: path.resolve(__dirname, 'public/editor.html'),
         filename: 'editor.html',
         chunks: ['editor'],
         inject: 'body',
-        scriptLoading: 'blocking'
+        scriptLoading: 'blocking',
+        templateParameters: {
+          engineScripts: isProd
+            ? ['vendor/jszip.min.js', 'editor-lib.js']
+            : EDITOR_SCRIPTS
+        }
       }),
       new CopyWebpackPlugin({
         patterns: [
@@ -134,8 +252,20 @@ module.exports = (env, argv) => {
           // as `from` is just a placeholder to hook transform into the copy.
           // No transform cache: the output depends on URLContent.js and
           // HomeRecorder.js, which the cache key (placeholder file) misses.
-          { from: 'src/zipDedupe.js', to: 'src/recorder-worker.js',
+          // Emitted at the root (NOT src/) so it isn't long-cached and
+          // worker fixes reach browsers via revalidation.
+          { from: 'src/zipDedupe.js', to: 'recorder-worker.js',
             transform: function () { return buildRecorderWorker(isProd); } },
+          // Single-file engine bundles for each page (prod only, see
+          // VIEWER_SCRIPTS/EDITOR_SCRIPTS above). Emitted at the frontend
+          // root, which the HA integration serves WITHOUT long cache
+          // headers, so upgrades take effect via cheap 304 revalidation.
+          ...(isProd ? [
+            { from: 'src/zipDedupe.js', to: 'viewer-lib.js',
+              transform: function () { return concatEngineScripts(VIEWER_SCRIPTS, isProd); } },
+            { from: 'src/zipDedupe.js', to: 'editor-lib.js',
+              transform: function () { return concatEngineScripts(EDITOR_SCRIPTS, isProd); } }
+          ] : []),
           { from: 'public/lib',    to: 'lib',    noErrorOnMissing: true },
           { from: 'public/assets', to: 'assets', noErrorOnMissing: true },
           // Default furniture catalog 3D models + thumbnails. The catalog
