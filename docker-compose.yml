@@ -1,0 +1,27 @@
+# Local test environment for the 3D Home Dashboard integration.
+#
+# Usage:
+#   1. npm run build:ha            # build the panel frontend (once, or after changes)
+#   2. docker compose up -d
+#   3. open http://localhost:8123 and finish Home Assistant onboarding
+#   4. Settings -> Devices & Services -> Add Integration -> "3D Home Dashboard"
+#      (or add `home_3d_dashboard:` to .ha-test/configuration.yaml and
+#       `docker compose restart`)
+#
+# Home Assistant state lives in the gitignored .ha-test/ directory —
+# delete that directory for a completely fresh instance. The integration
+# is bind-mounted from the working tree, so after editing Python files
+# run `docker compose restart`; after frontend changes run
+# `npm run build:ha` and hard-refresh the browser (Ctrl+F5).
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: ha-3d-dashboard
+    ports:
+      - "8123:8123"
+    volumes:
+      - ./.ha-test:/config
+      - ./custom_components/home_3d_dashboard:/config/custom_components/home_3d_dashboard
+    environment:
+      - TZ=Europe/Bucharest
+    restart: unless-stopped

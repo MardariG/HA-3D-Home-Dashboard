@@ -6,6 +6,7 @@ dist/
 .cache/
 .idea/
 .vscode/
+.ha-test/
 __pycache__/
 *.py[cod]
 *.swp

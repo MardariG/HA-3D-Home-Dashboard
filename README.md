@@ -59,6 +59,9 @@ it consumes the prebuilt JSweet output in `public/vendor/`):
 - `npm install` — installs webpack + plugins
 - `npm run build:ha` — builds the panel into
   `custom_components/home_3d_dashboard/frontend/` (committed, so HACS ships it)
+- `docker compose up -d` — spins up a disposable Home Assistant with the
+  integration bind-mounted (see comments in `docker-compose.yml`; state
+  lives in the gitignored `.ha-test/`)
 - `npm run build` — standalone web build into `dist/` (viewer at `/`,
   editor at `/editor.html`) for hosting outside HA
 - `npm start` — dev server on <http://localhost:8080> (standalone mode)
