@@ -1,0 +1,24 @@
+{
+  "name": "ha-3d-home-dashboard",
+  "version": "2.0.0",
+  "private": true,
+  "license": "GPL-2.0-or-later",
+  "description": "3D Home Dashboard for Home Assistant - build, edit and view your home in 3D, powered by the Sweet Home 3D engine.",
+  "scripts": {
+    "start": "webpack serve --mode development --open",
+    "dev": "webpack --mode development --watch",
+    "build": "webpack --mode production",
+    "build:ha": "webpack --mode production --env ha",
+    "clean": "rimraf dist custom_components/home_3d_dashboard/frontend"
+  },
+  "devDependencies": {
+    "copy-webpack-plugin": "^12.0.2",
+    "css-loader": "^7.1.4",
+    "html-webpack-plugin": "^5.6.0",
+    "rimraf": "^5.0.5",
+    "style-loader": "^4.0.0",
+    "webpack": "^5.94.0",
+    "webpack-cli": "^5.1.4",
+    "webpack-dev-server": "^5.0.4"
+  }
+}

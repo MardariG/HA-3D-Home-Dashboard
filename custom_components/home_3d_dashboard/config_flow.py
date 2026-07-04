@@ -1,14 +1,13 @@
 """Config flow for 3D Home Dashboard."""
 import voluptuous as vol
+
 from homeassistant import config_entries
 from homeassistant.core import callback
 
 DOMAIN = "home_3d_dashboard"
 
 
-class HomeDashboard3DConfigFlow(
-    config_entries.ConfigFlow, domain=DOMAIN
-):
+class HomeDashboard3DConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for 3D Home Dashboard."""
 
     VERSION = 1
@@ -18,14 +17,8 @@ class HomeDashboard3DConfigFlow(
         if info is not None:
             await self.async_set_unique_id(DOMAIN)
             self._abort_if_unique_id_configured()
-            return self.async_create_entry(
-                title="3D Home Dashboard",
-                data={},
-            )
-        return self.async_show_form(
-            step_id="user",
-            description_placeholders={},
-        )
+            return self.async_create_entry(title="3D Home Dashboard", data={})
+        return self.async_show_form(step_id="user", description_placeholders={})
 
     @staticmethod
     @callback
@@ -43,19 +36,14 @@ class OptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(self, info=None):
         """Manage options."""
         if info is not None:
-            return self.async_create_entry(
-                title="", data=info
-            )
+            return self.async_create_entry(title="", data=info)
         msg = (
-            "Upload your Sweet Home 3D"
-            " (.sh3d) model from the"
-            " 3D Dashboard panel"
-            " in the sidebar."
+            "Build or edit your home directly in the 3D Dashboard panel"
+            " in the sidebar. Homes are stored as .sh3d files in"
+            " config/home_3d_dashboard/."
         )
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({}),
-            description_placeholders={
-                "info": msg
-            },
+            description_placeholders={"info": msg},
         )
