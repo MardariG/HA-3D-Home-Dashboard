@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import shutil
 from pathlib import Path
 
 import voluptuous as vol
@@ -51,14 +52,25 @@ async def _setup_integration(hass: HomeAssistant) -> None:
     hass.data[DOMAIN]["_setup_done"] = True
 
     homes_dir = Path(hass.config.path(DOMAIN))
-    await hass.async_add_executor_job(
-        lambda: homes_dir.mkdir(parents=True, exist_ok=True)
-    )
-    await hass.async_add_executor_job(_load_data, hass)
-
     frontend_dir = Path(__file__).parent / "frontend"
+    await hass.async_add_executor_job(_init_homes_dir, homes_dir, frontend_dir)
+    await hass.async_add_executor_job(_load_data, hass)
+    # Heavy immutable assets (engine scripts, icons, 3D models) get long
+    # cache headers; only the HTML shells stay uncached so upgrades land.
+    # More specific paths must be registered before the frontend root,
+    # since aiohttp resolves prefixed resources in registration order.
     await hass.http.async_register_static_paths(
-        [StaticPathConfig(FRONTEND_URL, str(frontend_dir), False)]
+        [
+            StaticPathConfig(f"{FRONTEND_URL}/vendor", str(frontend_dir / "vendor"), True),
+            StaticPathConfig(f"{FRONTEND_URL}/src", str(frontend_dir / "src"), True),
+            StaticPathConfig(f"{FRONTEND_URL}/lib", str(frontend_dir / "lib"), True),
+            StaticPathConfig(f"{FRONTEND_URL}/assets", str(frontend_dir / "assets"), True),
+            StaticPathConfig(FRONTEND_URL, str(frontend_dir), False),
+            # The furniture catalog addresses its 3D models and thumbnails
+            # with absolute document-root URLs (/com/eteks/...), so that
+            # folder must also be reachable at the server root.
+            StaticPathConfig("/com", str(frontend_dir / "com"), True),
+        ]
     )
 
     hass.http.register_view(HomesListView(homes_dir))
@@ -75,7 +87,7 @@ async def _setup_integration(hass: HomeAssistant) -> None:
         sidebar_title="3D Dashboard",
         sidebar_icon="mdi:home-floor-3",
         frontend_url_path=PANEL_URL_PATH,
-        config={"url": f"{FRONTEND_URL}/editor.html"},
+        config={"url": f"{FRONTEND_URL}/index.html"},
         require_admin=False,
     )
 
@@ -95,6 +107,15 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async_remove_panel(hass, PANEL_URL_PATH)
     hass.data[DOMAIN]["_setup_done"] = False
     return True
+
+
+def _init_homes_dir(homes_dir: Path, frontend_dir: Path) -> None:
+    """Create the homes dir; seed it with the bundled sample home."""
+    homes_dir.mkdir(parents=True, exist_ok=True)
+    default_home = homes_dir / "default.sh3d"
+    sample = frontend_dir / "assets" / "default.sh3d"
+    if not default_home.exists() and sample.is_file():
+        shutil.copyfile(sample, default_home)
 
 
 def _storage_path(hass: HomeAssistant) -> Path:

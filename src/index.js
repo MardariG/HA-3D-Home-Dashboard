@@ -11,8 +11,16 @@
  */
 
 import './styles.css';
+import { addModeToggle } from './haMode.js';
+import { installZipRequestDeduplication } from './zipDedupe.js';
 
 function initViewer() {
+  installZipRequestDeduplication();
+  if (__HA_BUILD__) {
+    document.body.classList.add('ha-mode');
+    addModeToggle('editor.html', 'Edit');
+  }
+
   if (typeof window.viewHome !== 'function') {
     const msg =
       '[SweetHome3D] Global `viewHome` is not defined. ' +
@@ -23,9 +31,11 @@ function initViewer() {
     return;
   }
 
-  // URL of the .sh3d home file to display.
-  // `assets/default.sh3d` is copied from public/assets/ into dist/assets/ by webpack.
-  const homeUrl = 'assets/default.sh3d';
+  // URL of the .sh3d home file to display. In the HA build the home comes
+  // from the integration's API; standalone uses the bundled sample.
+  const homeUrl = __HA_BUILD__
+    ? '/api/home_3d_dashboard/homes/default'
+    : 'assets/default.sh3d';
 
   const onerror = function (err) {
     if (err === 'No WebGL') {
@@ -33,6 +43,17 @@ function initViewer() {
       return;
     }
     console.error(err && err.stack ? err.stack : err);
+    if (__HA_BUILD__) {
+      // Most likely there is no saved home yet (404) — guide, don't alert.
+      const progressLabel = document.getElementById('viewerProgressLabel');
+      const progressDiv = document.getElementById('viewerProgressDiv');
+      if (progressDiv) progressDiv.style.visibility = 'visible';
+      if (progressLabel) {
+        progressLabel.textContent =
+          'No home found yet — click "Edit" (top right) to build one.';
+      }
+      return;
+    }
     const message = err && err.message
       ? err.constructor.name + ' ' + err.message
       : String(err);

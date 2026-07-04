@@ -88,3 +88,39 @@ footer {
 footer a {
   color: #93c5fd;
 }
+
+/* Full-viewport dashboard layout for the Home Assistant build.
+   The `ha-mode` class is added on <body> by src/index.js when __HA_BUILD__. */
+body.ha-mode header,
+body.ha-mode footer {
+  display: none;
+}
+
+body.ha-mode .viewer-wrapper {
+  position: fixed;
+  inset: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+body.ha-mode #viewerCanvas {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  border: none;
+  border-radius: 0;
+}
+
+body.ha-mode #viewerNavigationDiv {
+  position: fixed;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 8px 16px;
+  background: rgba(17, 24, 39, 0.85);
+  border-radius: 8px;
+  z-index: 10000;
+  white-space: nowrap;
+}

@@ -89,7 +89,17 @@ ModelLoader.prototype.load = function(url, synchronous, loadingModelObserver) {
               return;
             }
           }
-          loader.parseModelEntry(zip.file(decodeURIComponent(modelEntryName)), zip, url, synchronous, loadingModelObserver);
+          var modelEntry = zip.file(decodeURIComponent(modelEntryName));
+          if (modelEntry === null) {
+            // Entry missing from zip (e.g. content saved as an unresolvable
+            // reference): report an error rather than crashing the parse
+            // queue and hanging all subsequent model loads.
+            if (loadingModelObserver.modelError !== undefined) {
+              loadingModelObserver.modelError("Missing entry \"" + modelEntryName + "\" in " + url);
+            }
+            return;
+          }
+          loader.parseModelEntry(modelEntry, zip, url, synchronous, loadingModelObserver);
         } catch (ex) {
           zipObserver.zipError(ex);
         }

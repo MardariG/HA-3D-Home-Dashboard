@@ -35,7 +35,17 @@
  *    running in quirks mode. We keep standards mode.)
  */
 
+import { addModeToggle } from './haMode.js';
+import { installZipRequestDeduplication } from './zipDedupe.js';
+
 function initEditor() {
+  installZipRequestDeduplication();
+  if (__HA_BUILD__) {
+    // Bottom-right corner: keeps clear of the toolbar and the plan pane's
+    // level selector at the top right.
+    addModeToggle('index.html', 'View', { bottom: 10 });
+  }
+
   if (typeof window.SweetHome3DJSApplication !== 'function') {
     var msg =
       '[SweetHome3D] Global `SweetHome3DJSApplication` is not defined. ' +
@@ -53,7 +63,10 @@ function initEditor() {
 
   var configuration = {
     includeAllContent: true,
-    compressionLevel: 0,
+    // DEFLATE the saved .sh3d (0 stores uncompressed: ~4x bigger files that
+    // the editor re-downloads on every open, since readHome cache-busts with
+    // an editionId query parameter).
+    compressionLevel: 5,
     writeHomeWithWorker: false,
     autoRecovery: false
   };
@@ -67,10 +80,39 @@ function initEditor() {
     configuration.writeHomeURL = '/api/home_3d_dashboard/homes/%s';
     configuration.listHomesURL = '/api/home_3d_dashboard/homes';
     configuration.deleteHomeURL = '/api/home_3d_dashboard/homes/%s?action=delete';
-    configuration.defaultHomeName = 'default';
+    // Deliberately NOT setting configuration.defaultHomeName:
+    // DirectRecordingHomeController.save() treats a home whose name equals
+    // defaultHomeName as never-saved and forces the "save as" name prompt
+    // (SweetHome3DJSApplication.js, save()). We name homes ourselves below.
   }
 
   var application = new window.SweetHome3DJSApplication(configuration);
+
+  if (__HA_BUILD__) {
+    // Single-home dashboard flow: the dashboard always shows the home named
+    // "default", so every save must overwrite it — never prompt for a name.
+    //
+    // 1. HomeController.save() falls into the "save as" path (name prompt
+    //    dialog) whenever home.getName() is null, which happens for homes
+    //    created via the New Home action. Naming every added home up front
+    //    keeps the controller on the direct-save path.
+    application.addHomesListener(function (ev) {
+      var CollectionEvent = window.CollectionEvent;
+      if (CollectionEvent
+          && ev.getType() === CollectionEvent.Type.ADD
+          && !ev.getItem().getName()) {
+        ev.getItem().setName('default');
+      }
+    });
+    // 2. Whatever name a dialog might still produce, force writes to
+    //    "default" so the viewer page always picks up the latest save.
+    var recorder = application.getHomeRecorder();
+    var originalWriteHome = recorder.writeHome;
+    recorder.writeHome = function (home, homeName, observer) {
+      home.setName('default');
+      return originalWriteHome.call(this, home, 'default', observer);
+    };
+  }
 
   // In the HA build homes are addressed by NAME (formatted into readHomeURL
   // by DirectHomeRecorder); in the plain web build by direct URL.

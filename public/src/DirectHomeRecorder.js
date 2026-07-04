@@ -79,14 +79,31 @@ DirectHomeRecorder.prototype.writeHome = function(home, homeName, observer) {
   var recorder = this;
   var contentsObserver = {
       contentsSaved: function(savedContentNames) {
-        // Search contents included in home
+        // Search contents included in home. With includeAllContent, also
+        // accept server-hosted catalog contents (plain URLContent) so pieces
+        // added from the furniture catalog are embedded in the saved file
+        // instead of being kept as URL references that only resolve while
+        // the catalog is served from the same document root.
+        var includeAllContent = recorder.configuration !== undefined
+            && recorder.configuration.includeAllContent === true;
         var homeContents = []
         recorder.searchContents(home, [], homeContents, function(content) {
-            return content instanceof HomeURLContent
-                || content instanceof SimpleURLContent;
+            if (content instanceof HomeURLContent
+                || content instanceof SimpleURLContent) {
+              return true;
+            }
+            if (includeAllContent
+                && content instanceof URLContent
+                && !(content instanceof LocalURLContent)) {
+              var baseUrl = content.isJAREntry() ? content.getJAREntryURL() : content.getURL();
+              return baseUrl.indexOf(LocalStorageURLContent.LOCAL_STORAGE_PREFIX) !== 0
+                  && baseUrl.indexOf(IndexedDBURLContent.INDEXED_DB_PREFIX) !== 0
+                  && baseUrl.indexOf("blob:") !== 0;
+            }
+            return false;
           });
 
-        var savedContentIndex = 0; 
+        var savedContentIndex = 0;
         for (var i = 0; i < homeContents.length; i++) {
           var content = homeContents[i];
           if (content instanceof HomeURLContent) {
@@ -99,6 +116,15 @@ DirectHomeRecorder.prototype.writeHome = function(home, homeName, observer) {
           } else if (content instanceof SimpleURLContent
                      && content.isJAREntry()
                      && URLContent.fromURL(content.getJAREntryURL()) instanceof LocalURLContent) {
+            savedContentNames [content.getURL()] = (++savedContentIndex).toString();
+          } else if (!(content instanceof SimpleURLContent)
+                     && content.isJAREntry()) {
+            // Catalog model inside a zip: embed all zip entries under an
+            // "N/" directory so the saved name "N/model.obj" resolves like
+            // homes saved by the desktop app (see HomeRecorder.writeZipEntries)
+            savedContentNames [content.getURL()] = (++savedContentIndex) + "/" + content.getJAREntryName();
+          } else if (!(content instanceof SimpleURLContent)) {
+            // Single-file catalog content (e.g. icon image): embed as flat entry
             savedContentNames [content.getURL()] = (++savedContentIndex).toString();
           }
         }

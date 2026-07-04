@@ -424,7 +424,19 @@ DefaultFurnitureCatalog.prototype.readFurnitureCategory = function(resource, ind
   if (contentFile.indexOf("!/") >= 0 && contentFile.indexOf("jar:") !== 0) {
     url = "jar:" + url;
   }
-  
+
+  // The default catalog stores each 3D model as a zip containing a single
+  // OBJ file named like the zip. Address that inner entry with a jar: URL:
+  // a plain zip URLContent can be displayed by ModelManager, but recorders
+  // save it as an unresolvable URL reference (see DirectHomeRecorder
+  // writeHome) which broke saved homes in the viewer.
+  if (url.indexOf("jar:") !== 0 && url.length > 4
+      && url.substring(url.length - 4).toLowerCase() === ".zip") {
+    var fileName = url.substring(url.lastIndexOf('/') + 1);
+    var objEntryName = fileName.substring(0, fileName.length - 4) + ".obj";
+    url = "jar:" + url + "!/" + objEntryName;
+  }
+
   var content = URLContent.fromURL(url);
   var contentDigest = this.getOptionalString(resource, contentDigestKey, null);
   if (contentDigest != null && contentDigest.length > 0) {
