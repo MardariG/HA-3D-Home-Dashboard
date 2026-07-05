@@ -161,10 +161,25 @@ class Home3DDashboardPanel extends HTMLElement {
         states[entityId] = state.state;
       }
     }
-    const json = JSON.stringify(states);
+    // Ambient context for the day/night + weather scene mood (see
+    // src/dashboardEffects.js in the viewer).
+    const ambient = {};
+    const sun = this._hass.states['sun.sun'];
+    if (sun) {
+      ambient.sun = {
+        state: sun.state,
+        elevation: sun.attributes.elevation,
+      };
+    }
+    const weatherId = Object.keys(this._hass.states)
+      .find((id) => id.startsWith('weather.'));
+    if (weatherId) {
+      ambient.weather = this._hass.states[weatherId].state;
+    }
+    const json = JSON.stringify([states, ambient]);
     if (json !== this._lastStatesJson) {
       this._lastStatesJson = json;
-      this._post({ type: 'sh3d-states', states });
+      this._post({ type: 'sh3d-states', states, ambient });
     }
   }
 

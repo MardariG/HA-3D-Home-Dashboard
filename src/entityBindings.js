@@ -11,6 +11,8 @@
  * builds, or the page opened directly).
  */
 
+import { applyAmbient } from './dashboardEffects.js';
+
 var ON_COLOR = 0xF9A825;
 var CLICK_TOLERANCE_PX = 5;
 
@@ -23,6 +25,7 @@ export function installEntityBindings(previewComponent) {
   var component3D = null;
   var mappings = {};
   var states = {};
+  var ambient = null;
   var originalColors = {};
 
   function post(msg) {
@@ -41,7 +44,9 @@ export function installEntityBindings(previewComponent) {
       renderStates();
     } else if (ev.data.type === 'sh3d-states') {
       states = ev.data.states || {};
+      ambient = ev.data.ambient || null;
       renderStates();
+      applyAmbient(home, ambient);
     }
   });
 
@@ -55,6 +60,7 @@ export function installEntityBindings(previewComponent) {
       clearInterval(waiter);
       attachClickHandler();
       renderStates();
+      applyAmbient(home, ambient);
       post({ type: 'sh3d-ready' });
     }
   }, 250);
