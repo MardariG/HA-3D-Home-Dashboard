@@ -13,6 +13,7 @@
 import './styles.css';
 import { addModeToggle } from './haMode.js';
 import { installZipRequestDeduplication } from './zipDedupe.js';
+import { installEntityBindings } from './entityBindings.js';
 
 function initViewer() {
   installZipRequestDeduplication();
@@ -80,7 +81,7 @@ function initViewer() {
       part + ' ' + info;
   };
 
-  window.viewHome(
+  const previewComponent = window.viewHome(
     'viewerCanvas', // id of the <canvas> element
     homeUrl,        // URL of the .sh3d file
     onerror,        // error callback
@@ -94,6 +95,12 @@ function initViewer() {
       activateCameraSwitchKey: true
     }
   );
+
+  if (__HA_BUILD__) {
+    // Bridges to the HA custom panel (public/panel.js) when embedded in it:
+    // entity bind mode, live state tinting, click-to-toggle.
+    installEntityBindings(previewComponent);
+  }
 }
 
 if (document.readyState === 'loading') {

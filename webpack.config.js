@@ -256,6 +256,8 @@ module.exports = (env, argv) => {
           // worker fixes reach browsers via revalidation.
           { from: 'src/zipDedupe.js', to: 'recorder-worker.js',
             transform: function () { return buildRecorderWorker(isProd); } },
+          // HA custom panel element (frontend root: uncached, revalidates).
+          { from: 'public/panel.js', to: 'panel.js' },
           // Single-file engine bundles for each page (prod only, see
           // VIEWER_SCRIPTS/EDITOR_SCRIPTS above). Emitted at the frontend
           // root, which the HA integration serves WITHOUT long cache

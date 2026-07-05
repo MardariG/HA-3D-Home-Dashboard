@@ -1220,6 +1220,10 @@ HomePane.prototype.createPopupMenus = function(home, preferences) {
             homePane.addActionToMenu(ActionType.UNGROUP_FURNITURE, builder);
             homePane.createAlignOrDistributeMenu(builder);
             homePane.addActionToMenu(ActionType.RESET_FURNITURE_ELEVATION, builder);
+            // Home Assistant entity binding hook (see src/editorBindings.js)
+            if (typeof window.__sh3dAppendBindMenuItem === "function") {
+              window.__sh3dAppendBindMenuItem(builder, home);
+            }
             builder.addSeparator();
             homePane.createFurnitureSortMenu(home, builder);
             homePane.createFurnitureDisplayPropertyMenu(home, builder);
@@ -1247,6 +1251,10 @@ HomePane.prototype.createPopupMenus = function(home, preferences) {
             homePane.addActionToMenu(ActionType.GROUP_FURNITURE, builder);
             homePane.addActionToMenu(ActionType.UNGROUP_FURNITURE, builder);
             homePane.addActionToMenu(ActionType.RESET_FURNITURE_ELEVATION, builder);
+            // Home Assistant entity binding hook (see src/editorBindings.js)
+            if (typeof window.__sh3dAppendBindMenuItem === "function") {
+              window.__sh3dAppendBindMenuItem(builder, home);
+            }
             builder.addSeparator();
             homePane.addActionToMenu(ActionType.MODIFY_COMPASS, builder);
             homePane.addActionToMenu(ActionType.MODIFY_WALL, builder);
@@ -1311,6 +1319,10 @@ HomePane.prototype.createPopupMenus = function(home, preferences) {
             homePane.addActionToMenu(ActionType.DISPLAY_ALL_LEVELS, builder);
             homePane.addActionToMenu(ActionType.DISPLAY_SELECTED_LEVEL, builder);
             homePane.addActionToMenu(ActionType.MODIFY_3D_ATTRIBUTES, builder);
+            // Home Assistant entity binding hook (see src/editorBindings.js)
+            if (typeof window.__sh3dAppendBindMenuItem === "function") {
+              window.__sh3dAppendBindMenuItem(builder, home);
+            }
           });
     }
   } else {

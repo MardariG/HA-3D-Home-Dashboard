@@ -1980,7 +1980,9 @@ PlanComponent.createCustomCursor = function(name, defaultCursor) {
    if (OperatingSystem.isInternetExplorer()) {
      return defaultCursor;
    } else {
-     return 'url("' + ZIPTools.getScriptFolder() + '/resources/cursors/' 
+     // getScriptFolder() already ends with a slash; a leading one here made
+     // "vendor//resources/..." which the HA static handler rejects (404)
+     return 'url("' + ZIPTools.getScriptFolder() + 'resources/cursors/'
                  + name + '16x16' + (OperatingSystem.isMacOSX() ? '-macosx' : '') + '.png") 8 8, ' + defaultCursor;
    }
 }

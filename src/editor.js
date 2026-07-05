@@ -37,6 +37,7 @@
 
 import { addModeToggle } from './haMode.js';
 import { installZipRequestDeduplication } from './zipDedupe.js';
+import { installEditorBindings } from './editorBindings.js';
 
 function initEditor() {
   installZipRequestDeduplication();
@@ -114,6 +115,9 @@ function initEditor() {
       home.setName('default');
       return originalWriteHome.call(this, home, 'default', observer);
     };
+
+    // Entity binding authoring (select a piece, then "Bind entity").
+    installEditorBindings(application);
   }
 
   // In the HA build homes are addressed by NAME (formatted into readHomeURL

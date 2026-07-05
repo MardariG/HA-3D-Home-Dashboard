@@ -81,13 +81,23 @@ async def _setup_integration(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get_settings)
     websocket_api.async_register_command(hass, ws_save_settings)
 
+    # Custom element panel (frontend/panel.js): unlike an iframe panel it
+    # receives the authenticated hass object, which it bridges to the viewer
+    # iframe over postMessage for entity bindings and click-to-toggle.
     async_register_built_in_panel(
         hass,
-        "iframe",
+        component_name="custom",
         sidebar_title="3D Dashboard",
         sidebar_icon="mdi:home-floor-3",
         frontend_url_path=PANEL_URL_PATH,
-        config={"url": f"{FRONTEND_URL}/index.html"},
+        config={
+            "_panel_custom": {
+                "name": "home-3d-dashboard-panel",
+                "embed_iframe": False,
+                "trust_external": False,
+                "js_url": f"{FRONTEND_URL}/panel.js",
+            }
+        },
         require_admin=False,
     )
 
