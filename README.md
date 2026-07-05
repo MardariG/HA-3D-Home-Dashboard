@@ -32,11 +32,15 @@ sidebar. (Alternatively add `home_3d_dashboard:` to `configuration.yaml`.)
   interchange freely with the desktop [Sweet Home 3D](https://www.sweethome3d.com/) app
 - **3D navigation** — orbit, pan, zoom, aerial view and virtual visit modes,
   mouse or touch
-- **Entity bindings** — right-click a furniture piece in the editor
-  (furniture list, plan or 3D view) → *Bind to entity…* and pick any
-  toggleable Home Assistant entity. In view mode the piece tints amber
-  while the entity is on, and clicking/tapping it toggles the entity.
-  Mappings persist server-side (v1-compatible storage format).
+- **Entity bindings** — right-click a furniture piece *or room* in the
+  editor (furniture list, plan or 3D view) → *Bind to entity…*. In view
+  mode, toggleable entities tint their object amber while on and toggle on
+  click/tap; `sensor.*`/`climate.*` entities show a floating 3D label with
+  the live value, and rooms bound to temperature sensors get a floor
+  heatmap (blue → red). Mappings persist server-side (v1-compatible).
+- **Living scene** — the 3D view follows the real world: sun elevation
+  drives a day/night lighting cycle (with golden-hour tint) and your
+  `weather.*` entity dims the light and greys the sky when it's overcast.
 - **Authenticated API** — the sidebar panel is a custom element that owns
   the frontend's access token and hands it to the viewer/editor, so the
   home file API runs with `requires_auth` like any HA endpoint.

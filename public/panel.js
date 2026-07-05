@@ -21,7 +21,7 @@
 
 const FRONTEND_URL = '/home_3d_dashboard-frontend';
 const BINDABLE_DOMAINS =
-  /^(light|switch|fan|cover|lock|media_player|climate|input_boolean|scene|script|vacuum)\./;
+  /^(light|switch|fan|cover|lock|media_player|climate|input_boolean|scene|script|vacuum|sensor)\./;
 
 class Home3DDashboardPanel extends HTMLElement {
   constructor() {
@@ -158,7 +158,11 @@ class Home3DDashboardPanel extends HTMLElement {
       const entityId = this._mappings[pieceId];
       const state = this._hass.states[entityId];
       if (state) {
-        states[entityId] = state.state;
+        states[entityId] = {
+          state: state.state,
+          unit: state.attributes.unit_of_measurement,
+          currentTemperature: state.attributes.current_temperature,
+        };
       }
     }
     // Ambient context for the day/night + weather scene mood (see

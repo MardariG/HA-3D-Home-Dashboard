@@ -49,11 +49,15 @@ export function installEditorBindings(application) {
     }
   }, 250);
 
-  function selectedPiece(home) {
+  function selectedBindable(home) {
     var selected = home.getSelectedItems().filter(function (item) {
-      return typeof item.getId === 'function'
-          && typeof item.getName === 'function'
-          && typeof item.getModel === 'function'; // furniture only
+      if (typeof item.getId !== 'function') {
+        return false;
+      }
+      // Furniture pieces (have a 3D model) or rooms (have a floor):
+      // rooms suit sensors -> floor heatmap + centered label in view mode
+      return typeof item.getModel === 'function'
+          || typeof item.getFloorColor === 'function';
     });
     return selected.length === 1 ? selected[0] : null;
   }
@@ -65,7 +69,7 @@ export function installEditorBindings(application) {
     if (!bridgeReady) {
       return;
     }
-    var piece = selectedPiece(home);
+    var piece = selectedBindable(home);
     if (piece === null) {
       return;
     }
@@ -91,7 +95,9 @@ export function installEditorBindings(application) {
       'font:13px/1.5 system-ui,sans-serif;width:340px;';
 
     var title = document.createElement('div');
-    title.textContent = 'Bind "' + (piece.getName() || 'piece') + '" to:';
+    var pieceName = (typeof piece.getName === 'function' && piece.getName())
+      || (typeof piece.getFloorColor === 'function' ? 'room' : 'piece');
+    title.textContent = 'Bind "' + pieceName + '" to:';
     title.style.cssText = 'font-weight:600;margin-bottom:8px;';
     picker.appendChild(title);
 
