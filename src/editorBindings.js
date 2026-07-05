@@ -106,26 +106,63 @@ export function installEditorBindings(application) {
       var hint = document.createElement('div');
       hint.textContent =
         'No bindable entities found in Home Assistant (looking for light, '
-        + 'switch, fan, cover, lock, media_player, climate, input_boolean, '
-        + 'scene, script, vacuum). Create one — e.g. Settings → Devices'
-        + ' & Services → Helpers → Toggle — then reload this page.';
+        + 'switch, fan, cover, lock, media_player, climate, sensor, '
+        + 'input_boolean, scene, script, vacuum). Create one — e.g. Settings'
+        + ' → Devices & Services → Helpers → Toggle — then reload this page.';
       hint.style.cssText = 'margin-bottom:8px;color:#ffcc80;';
       picker.appendChild(hint);
     } else {
+      var search = document.createElement('input');
+      search.type = 'search';
+      search.placeholder = 'Search entities…';
+      search.style.cssText =
+        'width:100%;margin-bottom:6px;padding:4px 6px;box-sizing:border-box;';
+      picker.appendChild(search);
+
       select = document.createElement('select');
+      select.size = 8; // list box: scannable with hundreds of sensors
       select.style.cssText = 'width:100%;margin-bottom:10px;padding:4px;';
-      var none = document.createElement('option');
-      none.value = '';
-      none.textContent = '— no entity —';
-      select.appendChild(none);
-      for (var i = 0; i < entities.length; i++) {
-        var option = document.createElement('option');
-        option.value = entities[i].entity_id;
-        option.textContent = entities[i].name + ' (' + entities[i].entity_id + ')';
-        select.appendChild(option);
-      }
-      select.value = mappings[pieceId] || '';
+      var currentValue = mappings[pieceId] || '';
+
+      var fillOptions = function (filter) {
+        var terms = filter.toLowerCase().split(/\s+/).filter(Boolean);
+        select.innerHTML = '';
+        var none = document.createElement('option');
+        none.value = '';
+        none.textContent = '— no entity —';
+        select.appendChild(none);
+        for (var i = 0; i < entities.length; i++) {
+          var haystack = (entities[i].name + ' ' + entities[i].entity_id).toLowerCase();
+          var match = true;
+          for (var t = 0; t < terms.length; t++) {
+            if (haystack.indexOf(terms[t]) < 0) {
+              match = false;
+              break;
+            }
+          }
+          if (!match) {
+            continue;
+          }
+          var option = document.createElement('option');
+          option.value = entities[i].entity_id;
+          option.textContent = entities[i].name + ' (' + entities[i].entity_id + ')';
+          select.appendChild(option);
+        }
+        // Keep the current choice selected when it survives the filter
+        select.value = currentValue;
+        if (select.value !== currentValue) {
+          select.selectedIndex = terms.length > 0 && select.options.length > 1 ? 1 : 0;
+        }
+      };
+      fillOptions('');
+      search.addEventListener('input', function () {
+        fillOptions(search.value);
+      });
+      select.addEventListener('change', function () {
+        currentValue = select.value;
+      });
       picker.appendChild(select);
+      setTimeout(function () { search.focus(); }, 0);
     }
 
     var actions = document.createElement('div');

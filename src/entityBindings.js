@@ -57,7 +57,9 @@ export function installEntityBindings(previewComponent) {
     }
     if (ev.data.type === 'sh3d-init') {
       mappings = ev.data.mappings || {};
+      console.info('[3d-dashboard] init: ' + Object.keys(mappings).length + ' binding(s)');
       renderStates();
+      logUnmatchedBindings();
     } else if (ev.data.type === 'sh3d-states') {
       states = ev.data.states || {};
       ambient = ev.data.ambient || null;
@@ -65,6 +67,19 @@ export function installEntityBindings(previewComponent) {
       applyAmbient(home, ambient);
     }
   });
+
+  function logUnmatchedBindings() {
+    if (!home) {
+      return;
+    }
+    for (var targetId in mappings) {
+      if (findTarget(targetId) === null) {
+        console.warn('[3d-dashboard] binding target not found in this home: '
+          + targetId + ' -> ' + mappings[targetId]
+          + ' (was the home saved after the piece/room was created?)');
+      }
+    }
+  }
 
   // The home loads asynchronously inside HomePreviewComponent.
   var waiter = setInterval(function () {
@@ -76,6 +91,7 @@ export function installEntityBindings(previewComponent) {
       clearInterval(waiter);
       attachClickHandler();
       renderStates();
+      logUnmatchedBindings();
       applyAmbient(home, ambient);
       post({ type: 'sh3d-ready' });
     }
@@ -150,11 +166,17 @@ export function installEntityBindings(previewComponent) {
       if (target === null) {
         continue;
       }
-      if (VALUE_DOMAINS.test(entityId)) {
-        renderValue(targetId, target, states[entityId]);
-      } else {
-        renderOnOff(targetId, target,
-          states[entityId] !== undefined && states[entityId].state === 'on');
+      // Isolate each binding: one failing render must not break the rest
+      try {
+        if (VALUE_DOMAINS.test(entityId)) {
+          renderValue(targetId, target, states[entityId]);
+        } else {
+          renderOnOff(targetId, target,
+            states[entityId] !== undefined && states[entityId].state === 'on');
+        }
+      } catch (ex) {
+        console.warn('[3d-dashboard] failed to render binding '
+          + targetId + ' -> ' + entityId, ex);
       }
     }
     // Drop leftovers of removed bindings

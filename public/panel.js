@@ -108,9 +108,11 @@ class Home3DDashboardPanel extends HTMLElement {
         break;
       case 'sh3d-toggle':
         if (this._hass && typeof ev.data.entityId === 'string') {
-          this._hass.callService('homeassistant', 'toggle', {
-            entity_id: ev.data.entityId,
-          });
+          console.info('[3d-dashboard] toggle', ev.data.entityId);
+          this._hass
+            .callService('homeassistant', 'toggle', { entity_id: ev.data.entityId })
+            .catch((err) =>
+              console.error('[3d-dashboard] toggle failed', ev.data.entityId, err));
         }
         break;
       case 'sh3d-save-mappings':
@@ -144,6 +146,9 @@ class Home3DDashboardPanel extends HTMLElement {
         entity_id: id,
         name: this._hass.states[id].attributes.friendly_name || id,
       }));
+    console.info('[3d-dashboard] init sent: '
+      + Object.keys(this._mappings).length + ' mapping(s), '
+      + entities.length + ' bindable entities');
     this._post({ type: 'sh3d-init', mappings: this._mappings, entities });
     this._lastStatesJson = null;
     this._pushStates();
