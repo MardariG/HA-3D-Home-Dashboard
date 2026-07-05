@@ -6,10 +6,12 @@
  * the Sweet Home 3D viewer in an iframe; the two sides talk over
  * postMessage (same-origin only):
  *
- *   iframe -> panel : sh3d-ready
+ *   iframe -> panel : sh3d-hello         (page boot: request config)
+ *                     sh3d-ready         (home loaded: request init)
  *                     sh3d-toggle        {entityId}
  *                     sh3d-save-mappings {mappings: {pieceId: entityId}}
- *   panel -> iframe : sh3d-init          {mappings, entities}
+ *   panel -> iframe : sh3d-config        {accessToken} (re-sent on refresh)
+ *                     sh3d-init          {mappings, entities}
  *                     sh3d-states        {states: {entityId: state}}
  *
  * Mappings persist through the integration's websocket commands
@@ -28,6 +30,8 @@ class Home3DDashboardPanel extends HTMLElement {
     this._iframe = null;
     this._viewerReady = false;
     this._initSent = false;
+    this._helloPending = false;
+    this._lastToken = null;
     this._mappings = null;
     this._lastStatesJson = null;
     this._onMessage = this._onMessage.bind(this);
@@ -35,11 +39,28 @@ class Home3DDashboardPanel extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    if (this._helloPending) {
+      this._helloPending = false;
+      this._sendConfig();
+    } else if (this._lastToken !== null && this._accessToken() !== this._lastToken) {
+      // Frontend refreshed its access token: keep the iframe's copy current
+      this._sendConfig();
+    }
     if (this._viewerReady && !this._initSent) {
       this._sendInit();
     } else if (this._initSent) {
       this._pushStates();
     }
+  }
+
+  _accessToken() {
+    return (this._hass && this._hass.auth && this._hass.auth.data
+      && this._hass.auth.data.access_token) || null;
+  }
+
+  _sendConfig() {
+    this._lastToken = this._accessToken();
+    this._post({ type: 'sh3d-config', accessToken: this._lastToken });
   }
 
   set panel(panel) {
@@ -71,6 +92,13 @@ class Home3DDashboardPanel extends HTMLElement {
       return;
     }
     switch (ev.data.type) {
+      case 'sh3d-hello':
+        if (this._hass) {
+          this._sendConfig();
+        } else {
+          this._helloPending = true;
+        }
+        break;
       case 'sh3d-ready':
         this._viewerReady = true;
         this._initSent = false; // a page reload (view/edit toggle) re-inits

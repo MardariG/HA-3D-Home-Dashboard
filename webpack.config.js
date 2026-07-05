@@ -148,6 +148,10 @@ function buildRecorderWorker(isProd) {
   // XMLHttpRequest to a relative URL like /api/... throws "Invalid URL".
   // Content URLs are server-relative (/api/, /com/); resolve them against
   // the page origin, which the blob URL of the worker itself carries.
+  // The same wrapper attaches the HA access token to integration API
+  // requests (the homes API requires auth); the token travels inside the
+  // recorder configuration, captured by wrapping the HomeRecorder
+  // constructor the in-worker bootstrap code instantiates.
   parts.push(
     '(function() {\n' +
     '  var base = self.location.href;\n' +
@@ -155,6 +159,8 @@ function buildRecorderWorker(isProd) {
     '  var origin = new URL(base).origin;\n' +
     '  var originalOpen = XMLHttpRequest.prototype.open;\n' +
     '  XMLHttpRequest.prototype.open = function(method, url, async, user, password) {\n' +
+    '    this.__sh3dApiRequest = typeof url === "string"\n' +
+    '        && url.indexOf("/api/home_3d_dashboard/") !== -1;\n' +
     '    if (typeof url === "string" && url.indexOf("://") < 0\n' +
     '        && url.indexOf("data:") !== 0 && url.indexOf("blob:") !== 0) {\n' +
     '      url = new URL(url, origin).href;\n' +
@@ -162,6 +168,21 @@ function buildRecorderWorker(isProd) {
     '    return originalOpen.call(this, method, url,\n' +
     '        async === undefined ? true : async, user, password);\n' +
     '  };\n' +
+    '  var originalSend = XMLHttpRequest.prototype.send;\n' +
+    '  XMLHttpRequest.prototype.send = function(body) {\n' +
+    '    if (this.__sh3dApiRequest && self.__sh3dAccessToken) {\n' +
+    '      this.setRequestHeader("Authorization", "Bearer " + self.__sh3dAccessToken);\n' +
+    '    }\n' +
+    '    return originalSend.call(this, body);\n' +
+    '  };\n' +
+    '  var OriginalHomeRecorder = HomeRecorder;\n' +
+    '  HomeRecorder = function(configuration) {\n' +
+    '    if (configuration && configuration.__haAccessToken) {\n' +
+    '      self.__sh3dAccessToken = configuration.__haAccessToken;\n' +
+    '    }\n' +
+    '    OriginalHomeRecorder.call(this, configuration);\n' +
+    '  };\n' +
+    '  HomeRecorder.prototype = OriginalHomeRecorder.prototype;\n' +
     '})();\n');
   parts.push(
     fs.readFileSync(path.resolve(__dirname, 'src/zipDedupe.js'), 'utf8')

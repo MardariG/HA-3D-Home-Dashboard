@@ -14,6 +14,7 @@ import './styles.css';
 import { addModeToggle } from './haMode.js';
 import { installZipRequestDeduplication } from './zipDedupe.js';
 import { installEntityBindings } from './entityBindings.js';
+import { installAuthXhr, requestPanelConfig } from './haAuth.js';
 
 function initViewer() {
   installZipRequestDeduplication();
@@ -103,8 +104,25 @@ function initViewer() {
   }
 }
 
+function boot() {
+  if (__HA_BUILD__ && window.parent !== window) {
+    // The homes API requires auth: get the access token from the panel
+    // before the engine starts fetching (see src/haAuth.js).
+    installAuthXhr();
+    requestPanelConfig(initViewer, function () {
+      const progressLabel = document.getElementById('viewerProgressLabel');
+      if (progressLabel) {
+        progressLabel.textContent =
+          'No connection to Home Assistant — open this page through the 3D Dashboard sidebar panel.';
+      }
+    });
+  } else {
+    initViewer();
+  }
+}
+
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initViewer);
+  document.addEventListener('DOMContentLoaded', boot);
 } else {
-  initViewer();
+  boot();
 }

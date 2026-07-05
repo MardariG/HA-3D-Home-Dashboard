@@ -73,22 +73,40 @@ export function installEntityBindings(previewComponent) {
     var canvas = component3D.getHTMLElement();
     var downX = null;
     var downY = null;
-    canvas.addEventListener('mousedown', function (ev) {
-      downX = ev.clientX;
-      downY = ev.clientY;
-    });
-    canvas.addEventListener('mouseup', function (ev) {
+
+    function handleTap(x, y) {
       if (downX === null
-          || Math.abs(ev.clientX - downX) > CLICK_TOLERANCE_PX
-          || Math.abs(ev.clientY - downY) > CLICK_TOLERANCE_PX) {
-        return; // camera drag, not a click
+          || Math.abs(x - downX) > CLICK_TOLERANCE_PX
+          || Math.abs(y - downY) > CLICK_TOLERANCE_PX) {
+        return; // camera drag, not a tap
       }
-      var item = component3D.getClosestItemAt(ev.clientX, ev.clientY);
+      var item = component3D.getClosestItemAt(x, y);
       if (item !== null && typeof item.getId === 'function') {
         var entityId = mappings[item.getId()];
         if (entityId) {
           post({ type: 'sh3d-toggle', entityId: entityId });
         }
+      }
+    }
+
+    canvas.addEventListener('mousedown', function (ev) {
+      downX = ev.clientX;
+      downY = ev.clientY;
+    });
+    canvas.addEventListener('mouseup', function (ev) {
+      handleTap(ev.clientX, ev.clientY);
+    });
+    canvas.addEventListener('touchstart', function (ev) {
+      if (ev.touches.length === 1) {
+        downX = ev.touches[0].clientX;
+        downY = ev.touches[0].clientY;
+      } else {
+        downX = null; // multi-touch = camera gesture
+      }
+    });
+    canvas.addEventListener('touchend', function (ev) {
+      if (ev.changedTouches.length === 1) {
+        handleTap(ev.changedTouches[0].clientX, ev.changedTouches[0].clientY);
       }
     });
   }

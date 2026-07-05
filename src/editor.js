@@ -38,6 +38,7 @@
 import { addModeToggle } from './haMode.js';
 import { installZipRequestDeduplication } from './zipDedupe.js';
 import { installEditorBindings } from './editorBindings.js';
+import { installAuthXhr, requestPanelConfig, getAccessToken } from './haAuth.js';
 
 function initEditor() {
   installZipRequestDeduplication();
@@ -68,9 +69,13 @@ function initEditor() {
     // the editor re-downloads on every open, since readHome cache-busts with
     // an editionId query parameter).
     compressionLevel: 5,
-    // Zip + deflate on a worker thread so saving doesn't freeze the UI.
-    // The worker imports src/recorder-worker.js (see editor.html).
-    writeHomeWithWorker: true,
+    // Standalone: zip on a worker thread (imports recorder-worker.js, see
+    // editor.html). HA build: save on the main thread — the page's ZIPTools
+    // cache already holds the home zip (no re-download) and its XHRs carry
+    // the auth token; the worker would have to refetch the home over the
+    // authenticated API, which proved fragile. Deflating ~3 MB blocks the
+    // UI well under a second.
+    writeHomeWithWorker: !__HA_BUILD__,
     autoRecovery: false
   };
 
@@ -113,6 +118,11 @@ function initEditor() {
     var originalWriteHome = recorder.writeHome;
     recorder.writeHome = function (home, homeName, observer) {
       home.setName('default');
+      // The save worker reads the home zip over the authenticated API; it
+      // picks the token up from the configuration it is instantiated with
+      // (see the recorder-worker shim in webpack.config.js). Refresh it at
+      // each save in case the frontend rotated its token meanwhile.
+      this.configuration.__haAccessToken = getAccessToken();
       return originalWriteHome.call(this, home, 'default', observer);
     };
 
@@ -156,8 +166,26 @@ function initEditor() {
   window.__sh3dApp = application;
 }
 
+function boot() {
+  if (__HA_BUILD__ && window.parent !== window) {
+    // The homes API requires auth: get the access token from the panel
+    // before the application starts reading the home (see src/haAuth.js).
+    installAuthXhr();
+    requestPanelConfig(initEditor, function () {
+      document.body.insertAdjacentHTML(
+        'afterbegin',
+        '<pre style="color:#c0392b;padding:20px;font-family:monospace;">' +
+          'No connection to Home Assistant — open this page through the 3D Dashboard sidebar panel.' +
+          '</pre>'
+      );
+    });
+  } else {
+    initEditor();
+  }
+}
+
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initEditor);
+  document.addEventListener('DOMContentLoaded', boot);
 } else {
-  initEditor();
+  boot();
 }

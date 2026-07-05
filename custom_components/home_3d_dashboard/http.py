@@ -35,9 +35,9 @@ class HomesListView(HomeAssistantView):
 
     url = "/api/home_3d_dashboard/homes"
     name = "api:home_3d_dashboard:homes"
-    # The editor runs inside an iframe panel and has no way to attach the
-    # user's bearer token to its XHR calls. TODO: replace with signed paths.
-    requires_auth = False
+    # The custom panel hands its access token to the iframe, which attaches
+    # it as a Bearer header on every API request (see src/haAuth.js).
+    requires_auth = True
 
     def __init__(self, homes_dir: Path) -> None:
         self._homes_dir = homes_dir
@@ -55,7 +55,7 @@ class HomeView(HomeAssistantView):
 
     url = "/api/home_3d_dashboard/homes/{name}"
     name = "api:home_3d_dashboard:home"
-    requires_auth = False
+    requires_auth = True
 
     def __init__(self, homes_dir: Path) -> None:
         self._homes_dir = homes_dir

@@ -32,15 +32,20 @@ sidebar. (Alternatively add `home_3d_dashboard:` to `configuration.yaml`.)
   interchange freely with the desktop [Sweet Home 3D](https://www.sweethome3d.com/) app
 - **3D navigation** — orbit, pan, zoom, aerial view and virtual visit modes,
   mouse or touch
-- **Persistent mesh → entity mappings** (websocket API, kept from v1;
-  storage format compatible)
+- **Entity bindings** — right-click a furniture piece in the editor
+  (furniture list, plan or 3D view) → *Bind to entity…* and pick any
+  toggleable Home Assistant entity. In view mode the piece tints amber
+  while the entity is on, and clicking/tapping it toggles the entity.
+  Mappings persist server-side (v1-compatible storage format).
+- **Authenticated API** — the sidebar panel is a custom element that owns
+  the frontend's access token and hands it to the viewer/editor, so the
+  home file API runs with `requires_auth` like any HA endpoint.
 
 ### Roadmap
 
-- Live dashboard mode: render entity states in the 3D view (lights glow,
-  switches tint) and click a mapped object to toggle it — reusing the v1
-  mapping layer with the new engine
-- Authenticated home file API via signed paths
+- Per-light glow rendering (the engine's realtime renderer has no emissive
+  materials, so "on" is currently shown by tinting the whole piece)
+- Entity state details in a hover/click info card (brightness, temperature)
 
 ## Migrating from v1.x
 
@@ -86,10 +91,13 @@ The home file API implements the protocol expected by the engine's
 `.sh3d` bytes at `/api/home_3d_dashboard/homes/{name}`, JSON list at
 `/homes`, delete via GET `?action=delete`.
 
-Note: the API views currently use `requires_auth = False` because the
-editor runs in an iframe panel and cannot attach an HA bearer token; home
-names are strictly sanitized. Signed paths are the planned fix. HA's HTTP
-stack also caps uploads (~16 MB) — very model-heavy homes may exceed it.
+The API requires authentication: the custom panel element (`panel.js`)
+passes the frontend's access token to the iframe over a same-origin
+postMessage handshake, and the pages (plus the save worker) attach it as a
+Bearer header on API requests (`src/haAuth.js`). Consequently the
+viewer/editor pages only work when opened through the sidebar panel. Home
+names are strictly sanitized server-side. Note: HA's HTTP stack caps
+uploads (~16 MB) — very model-heavy homes may exceed it.
 
 ## Requirements
 
