@@ -49,6 +49,38 @@ export function installEditorBindings(application) {
     }
   }, 250);
 
+  // Bindings whose target no longer exists in the home (deleted pieces,
+  // rebuilt homes, v1 leftovers) accumulate in storage forever otherwise;
+  // each save is an opportunity to clean up against the CURRENT home.
+  function pruneOrphanMappings() {
+    var homes = application.getHomes();
+    if (homes.length === 0) {
+      return;
+    }
+    var home = homes[0];
+    var validIds = {};
+    var addPieceIds = function (piece) {
+      validIds[piece.getId()] = true;
+      if (piece instanceof window.HomeFurnitureGroup) {
+        piece.getAllFurniture().forEach(addPieceIds);
+      }
+    };
+    home.getFurniture().forEach(addPieceIds);
+    home.getRooms().forEach(function (room) {
+      validIds[room.getId()] = true;
+    });
+    var pruned = 0;
+    for (var targetId in mappings) {
+      if (!(targetId in validIds)) {
+        delete mappings[targetId];
+        pruned++;
+      }
+    }
+    if (pruned > 0) {
+      console.info('[3d-dashboard] pruned ' + pruned + ' orphaned binding(s)');
+    }
+  }
+
   function selectedBindable(home) {
     var selected = home.getSelectedItems().filter(function (item) {
       if (typeof item.getId !== 'function') {
@@ -175,6 +207,7 @@ export function installEditorBindings(application) {
         } else {
           delete mappings[pieceId];
         }
+        pruneOrphanMappings();
         post({ type: 'sh3d-save-mappings', mappings: mappings });
         hidePicker();
         showToast(select.value

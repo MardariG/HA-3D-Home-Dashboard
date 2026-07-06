@@ -132,9 +132,17 @@ class Home3DDashboardPanel extends HTMLElement {
   async _sendInit() {
     this._initSent = true;
     try {
-      this._mappings = await this._hass.callWS({
+      const raw = await this._hass.callWS({
         type: 'home_3d_dashboard/get_mappings',
       });
+      // Drop v1.x legacy entries (mesh-name keys with object values); only
+      // pieceId -> entityId string mappings are meaningful since v2
+      this._mappings = {};
+      for (const key of Object.keys(raw || {})) {
+        if (typeof raw[key] === 'string') {
+          this._mappings[key] = raw[key];
+        }
+      }
     } catch (err) {
       console.error('[home_3d_dashboard] get_mappings failed', err);
       this._mappings = {};

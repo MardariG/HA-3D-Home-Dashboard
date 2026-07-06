@@ -169,6 +169,31 @@ export function installBindings3D(api) {
     });
   }
 
+  /**
+   * A lit lamp must not cast shadows from its own meshes: the point light
+   * sits inside the shade, which would otherwise trap the light and only
+   * leak it through gaps (observed: the lamp's room stayed dark while a
+   * stripe of light hit the neighboring room through a door).
+   */
+  function setSelfShadow(targetId, casting) {
+    api.getGroupsByItemId(targetId).forEach(function (group) {
+      group.traverse(function (object) {
+        if (!object.isMesh) {
+          return;
+        }
+        if (!casting) {
+          if (object.userData.prevCastShadow === undefined) {
+            object.userData.prevCastShadow = object.castShadow;
+          }
+          object.castShadow = false;
+        } else if (object.userData.prevCastShadow !== undefined) {
+          object.castShadow = object.userData.prevCastShadow;
+          delete object.userData.prevCastShadow;
+        }
+      });
+    });
+  }
+
   function renderOnOff(targetId, item, state) {
     var on = state !== undefined && state.state === 'on';
     if (on) {
@@ -181,10 +206,12 @@ export function installBindings3D(api) {
           material.emissive.set(ON_EMISSIVE);
           material.emissiveIntensity = 0.55;
         });
+        setSelfShadow(targetId, false);
         ensurePointLight(targetId, item, state);
       }
     } else {
       overlayItem(targetId, null);
+      setSelfShadow(targetId, true);
       removePointLight(targetId);
     }
   }
