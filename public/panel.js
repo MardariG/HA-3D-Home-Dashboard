@@ -167,6 +167,7 @@ class Home3DDashboardPanel extends HTMLElement {
           state: state.state,
           unit: state.attributes.unit_of_measurement,
           currentTemperature: state.attributes.current_temperature,
+          brightness: state.attributes.brightness,
         };
       }
     }

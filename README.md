@@ -41,14 +41,21 @@ sidebar. (Alternatively add `home_3d_dashboard:` to `configuration.yaml`.)
 - **Living scene** — the 3D view follows the real world: sun elevation
   drives a day/night lighting cycle (with golden-hour tint) and your
   `weather.*` entity dims the light and greys the sky when it's overcast.
+- **Realistic rendering (v2.3)** — the dashboard renders with Three.js:
+  soft shadow mapping, ACES tone mapping, and lamps that actually LIGHT
+  their room when on — an emissive glow plus a shadow-casting point light
+  whose intensity follows the light's HA brightness. The Sweet Home 3D
+  engine still builds all geometry (walls/rooms/furniture stay pixel-true
+  to the editor); Three.js only replaces the rasterizer
+  (`src/dashboard3d.js` converts the engine's Java3D-style scene graph).
 - **Authenticated API** — the sidebar panel is a custom element that owns
   the frontend's access token and hands it to the viewer/editor, so the
   home file API runs with `requires_auth` like any HA endpoint.
 
 ### Roadmap
 
-- Per-light glow rendering (the engine's realtime renderer has no emissive
-  materials, so "on" is currently shown by tinting the whole piece)
+- Virtual-visit (walk-through) camera mode for the Three.js dashboard
+  (view mode currently offers orbit navigation; the editor keeps both)
 - Entity state details in a hover/click info card (brightness, temperature)
 
 ## Migrating from v1.x

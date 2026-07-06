@@ -44,28 +44,16 @@ function minifyEngineScript(content, absoluteFrom) {
   });
 }
 
-// Engine scripts of each page, in the exact order the upstream build loads
-// them (legacy global scripts: order is load-bearing). In production the
-// whole list (minus jszip, see below) is concatenated into ONE file per
-// page to collapse the request waterfall: 52 blocking round-trips hurt on
-// remote Home Assistant access even when every response is a 304.
+// Engine scripts, in the exact order the upstream build loads them (legacy
+// global scripts: order is load-bearing). Both pages use the READABLE
+// engine set: the editor renders with it, the dashboard uses it as scene
+// builder for the Three.js renderer (src/dashboard3d.js). In production
+// the whole list (minus jszip, see below) is concatenated into ONE file
+// (editor-lib.js) to collapse the request waterfall.
 //
 // vendor/jszip.min.js stays a real <script> tag in both pages:
 // ZIPTools.getScriptFolder() locates the vendor folder by finding that tag
 // and half the UI resolves its images/cursors/resources relative to it.
-const VIEWER_SCRIPTS = [
-  'vendor/big.min.js',
-  'vendor/gl-matrix-min.js',
-  'vendor/jszip.min.js',
-  'vendor/core.min.js',
-  'vendor/geom.min.js',
-  'vendor/stroke.min.js',
-  'vendor/batik-svgpathparser.min.js',
-  'vendor/jsXmlSaxParser.min.js',
-  'vendor/triangulator.min.js',
-  'vendor/viewmodel.min.js',
-  'vendor/viewhome.min.js'
-];
 const EDITOR_SCRIPTS = [
   'vendor/big.min.js',
   'vendor/gl-matrix-min.js',
@@ -247,8 +235,8 @@ module.exports = (env, argv) => {
         scriptLoading: 'blocking',
         templateParameters: {
           engineScripts: isProd
-            ? ['vendor/jszip.min.js', 'viewer-lib.js']
-            : VIEWER_SCRIPTS
+            ? ['vendor/jszip.min.js', 'editor-lib.js']
+            : EDITOR_SCRIPTS
         }
       }),
       new HtmlWebpackPlugin({
@@ -279,13 +267,11 @@ module.exports = (env, argv) => {
             transform: function () { return buildRecorderWorker(isProd); } },
           // HA custom panel element (frontend root: uncached, revalidates).
           { from: 'public/panel.js', to: 'panel.js' },
-          // Single-file engine bundles for each page (prod only, see
-          // VIEWER_SCRIPTS/EDITOR_SCRIPTS above). Emitted at the frontend
-          // root, which the HA integration serves WITHOUT long cache
-          // headers, so upgrades take effect via cheap 304 revalidation.
+          // Single-file engine bundle shared by both pages (prod only, see
+          // EDITOR_SCRIPTS above). Emitted at the frontend root, which the
+          // HA integration serves WITHOUT long cache headers, so upgrades
+          // take effect via cheap 304 revalidation.
           ...(isProd ? [
-            { from: 'src/zipDedupe.js', to: 'viewer-lib.js',
-              transform: function () { return concatEngineScripts(VIEWER_SCRIPTS, isProd); } },
             { from: 'src/zipDedupe.js', to: 'editor-lib.js',
               transform: function () { return concatEngineScripts(EDITOR_SCRIPTS, isProd); } }
           ] : []),

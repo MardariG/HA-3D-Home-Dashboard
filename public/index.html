@@ -3,52 +3,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sweet Home 3D — Web Viewer</title>
+  <title>3D Home Dashboard</title>
 
   <!--
-    Sweet Home 3D engine scripts. The ordered list lives in
-    webpack.config.js (VIEWER_SCRIPTS): individual files in dev builds,
-    vendor/jszip.min.js + the concatenated viewer-lib.js in production.
-    They MUST run BEFORE the webpack bundle, because they expose the
-    globals (`viewHome`, `HomeRecorder`, `Node3D`, ...) it relies on.
+    Sweet Home 3D engine scripts (readable build: the same set as the
+    editor — the dashboard uses the engine as scene BUILDER and renders
+    with Three.js, see src/dashboard3d.js). The ordered list lives in
+    webpack.config.js (EDITOR_SCRIPTS); production loads the concatenated
+    editor-lib.js.
   -->
-  <% engineScripts.forEach(function(script) { %><script defer src="<%= script %>"></script>
-  <% }); %>
+  <% engineScripts.forEach(function(script) { %><script type="text/javascript" src="<%= script %>"></script>
+<% }); %>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1a2e; }
+    #container { position: absolute; inset: 0; }
+    #status {
+      position: fixed; top: 10px; left: 10px; z-index: 10;
+      color: #fff; font: 13px/1.5 system-ui, sans-serif;
+      background: rgba(0,0,0,.5); padding: 6px 12px; border-radius: 6px;
+    }
+    #status:empty { display: none; }
+  </style>
 </head>
 <body>
-
-  <header>
-    <h1>Sweet Home 3D — Web Viewer</h1>
-    <div class="sub">Built with webpack • No Java / Ant / JSweet required</div>
-  </header>
-
-  <div class="viewer-wrapper">
-    <canvas id="viewerCanvas"
-            class="viewerComponent"
-            width="920"
-            height="600"
-            tabindex="1"></canvas>
-
-    <div id="viewerProgressDiv">
-      <progress id="viewerProgress" class="viewerComponent" value="0" max="200"></progress>
-      <label id="viewerProgressLabel" class="viewerComponent">Loading…</label>
-    </div>
-
-    <div id="viewerNavigationDiv">
-      <input id="aerialView" class="viewerComponent" name="cameraType" type="radio" checked>
-      <label class="viewerComponent" for="aerialView">Aerial view</label>
-      <input id="virtualVisit" class="viewerComponent" name="cameraType" type="radio">
-      <label class="viewerComponent" for="virtualVisit">Virtual visit</label>
-      &nbsp;&nbsp;
-      <label class="viewerComponent" for="levelsAndCameras">Camera:</label>
-      <select id="levelsAndCameras" class="viewerComponent"></select>
-    </div>
-  </div>
-
-  <footer>
-    Powered by <a href="https://www.sweethome3d.com" target="_blank" rel="noopener">Sweet Home 3D</a>
-    — Distributed under the GNU General Public License.
-  </footer>
-
+  <div id="container"></div>
+  <div id="status">Loading…</div>
 </body>
 </html>

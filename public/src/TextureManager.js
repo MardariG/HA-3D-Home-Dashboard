@@ -83,10 +83,20 @@ TextureManager.prototype.loadTexture = function(content, angle, synchronous, tex
     textureObserver = synchronous;
     synchronous = false;
   }
-  if (synchronous 
+  if (content == null) {
+    // A texture whose content couldn't be resolved: report as an error so
+    // observers fall back to the error image instead of crashing
+    if (textureObserver.textureError !== undefined) {
+      setTimeout(function() {
+          textureObserver.textureError("Missing texture content");
+        }, 0);
+    }
+    return;
+  }
+  if (synchronous
       && !content.isStreamURLReady()) {
     throw new IllegalStateException("Can't run synchronously with unavailable URL");
-  }    
+  }
   var textureManager = this;
   var contentUrl = content.getURL();
   content.getStreamURL({
