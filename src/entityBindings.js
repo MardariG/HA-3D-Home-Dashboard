@@ -41,7 +41,9 @@ export function installEntityBindings(previewComponent) {
   var states = {};
   var ambient = null;
   var originalPieceColors = {};
-  var originalFloorColors = {};
+  // targetId -> {color, texture}: floor texture must be cleared while
+  // tinting because the engine renders texture over color (Room3D)
+  var originalFloors = {};
   var valueLabels = {};
 
   function post(msg) {
@@ -186,14 +188,37 @@ export function installEntityBindings(previewComponent) {
         delete valueLabels[labelId];
       }
     }
-    for (var floorId in originalFloorColors) {
+    for (var floorId in originalFloors) {
       if (!(floorId in mappings)) {
         var stale = findTarget(floorId);
         if (stale !== null && stale.room) {
-          stale.room.setFloorColor(originalFloorColors[floorId]);
+          restoreFloor(floorId, stale.room);
+        } else {
+          delete originalFloors[floorId];
         }
-        delete originalFloorColors[floorId];
       }
+    }
+  }
+
+  function tintFloor(targetId, room, color) {
+    if (!(targetId in originalFloors)) {
+      originalFloors[targetId] = {
+        color: room.getFloorColor(),
+        texture: room.getFloorTexture()
+      };
+    }
+    if (room.getFloorTexture() !== null) {
+      room.setFloorTexture(null);
+    }
+    room.setFloorColor(color);
+  }
+
+  function restoreFloor(targetId, room) {
+    var original = originalFloors[targetId];
+    if (original !== undefined) {
+      room.setFloorColor(original.color);
+      room.setFloorTexture(original.texture);
+      delete originalFloors[targetId];
     }
   }
 
@@ -214,15 +239,10 @@ export function installEntityBindings(previewComponent) {
         delete originalPieceColors[targetId];
       }
     } else if (target.room) {
-      var room = target.room;
       if (on) {
-        if (!(targetId in originalFloorColors)) {
-          originalFloorColors[targetId] = room.getFloorColor();
-        }
-        room.setFloorColor(ON_COLOR);
-      } else if (targetId in originalFloorColors) {
-        room.setFloorColor(originalFloorColors[targetId]);
-        delete originalFloorColors[targetId];
+        tintFloor(targetId, target.room, ON_COLOR);
+      } else if (targetId in originalFloors) {
+        restoreFloor(targetId, target.room);
       }
     }
   }
@@ -258,13 +278,9 @@ export function installEntityBindings(previewComponent) {
 
     if (target.room) {
       if (isFinite(numeric)) {
-        if (!(targetId in originalFloorColors)) {
-          originalFloorColors[targetId] = target.room.getFloorColor();
-        }
-        target.room.setFloorColor(heatmapColor(numeric));
-      } else if (targetId in originalFloorColors) {
-        target.room.setFloorColor(originalFloorColors[targetId]);
-        delete originalFloorColors[targetId];
+        tintFloor(targetId, target.room, heatmapColor(numeric));
+      } else if (targetId in originalFloors) {
+        restoreFloor(targetId, target.room);
       }
     }
   }
@@ -282,9 +298,10 @@ export function installEntityBindings(previewComponent) {
     if (!label) {
       // Flat (pitch 0) labels read best from the aerial camera
       label = new window.Label(text, x, y);
-      if (typeof label.setPitch === 'function') {
-        label.setPitch(0);
-      }
+      // Label3D renders NOTHING when the label has no style (or no pitch):
+      // see Label3D.update()
+      label.setStyle(new window.TextStyle(30, false, false));
+      label.setPitch(0);
       if (typeof label.setElevation === 'function') {
         label.setElevation(elevation);
       }
