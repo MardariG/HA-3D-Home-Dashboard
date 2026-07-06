@@ -271,7 +271,12 @@ export function installEntityBindings(previewComponent) {
     } else {
       x = target.room.getXCenter();
       y = target.room.getYCenter();
-      elevation = 2; // just above the (possibly tinted) floor
+      // Levitate at the top of the walls: visible above the furniture and
+      // still readable from the aerial camera (labels stay flat, pitch 0)
+      elevation = typeof home.getWallHeight === 'function'
+          && isFinite(home.getWallHeight())
+        ? home.getWallHeight()
+        : 250;
       level = target.room.getLevel();
     }
     ensureLabel(targetId, x, y, elevation, level, text);
@@ -313,8 +318,14 @@ export function installEntityBindings(previewComponent) {
       }
       home.addLabel(label);
       valueLabels[targetId] = label;
-    } else if (label.getText() !== text) {
-      label.setText(text);
+    } else {
+      if (label.getText() !== text) {
+        label.setText(text);
+      }
+      if (typeof label.getElevation === 'function'
+          && label.getElevation() !== elevation) {
+        label.setElevation(elevation);
+      }
     }
   }
 }
