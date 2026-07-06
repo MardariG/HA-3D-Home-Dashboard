@@ -589,7 +589,8 @@ DefaultFurnitureCatalog.prototype.getShelfElevations = function(resource, index,
   var shelfElevations = null;
   var shelfElevationsString = this.getOptionalString(resource, this.getKey(DefaultFurnitureCatalog.PropertyKey.SHELF_ELEVATIONS, index), null);
   if (shelfElevationsString != null) {
-    var values = shelfElevationsString.split(/ +/);
+    // trim: JS split keeps trailing empty strings, unlike Java's
+    var values = shelfElevationsString.trim().split(/ +/);
     shelfElevations = new Array(values.length);
     for (var i = 0; i < values.length; i++) {
       shelfElevations [i] = parseFloat(values [i]) / height;
@@ -611,7 +612,9 @@ DefaultFurnitureCatalog.prototype.getShelfBoxes = function(resource, index, widt
   var shelfBoxes = null;
   var shelfBoxesString = this.getOptionalString(resource, this.getKey(DefaultFurnitureCatalog.PropertyKey.SHELF_BOXES, index), null);
   if (shelfBoxesString != null) {
-    var values = shelfBoxesString.split(/ +/);
+    // trim: unlike Java's split, JS split keeps trailing empty strings,
+    // and some catalog values carry trailing spaces (e.g. Bottles rack)
+    var values = shelfBoxesString.trim().split(/ +/);
     if (values.length % 6 != 0) {
       throw new IllegalArgumentException(
           "Expected a multiple of 6 values in " + this.getKey(DefaultFurnitureCatalog.PropertyKey.SHELF_BOXES, index) + " key");

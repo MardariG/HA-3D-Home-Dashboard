@@ -417,15 +417,30 @@ FurnitureCatalogListPanel.prototype.createPieceOfFurniturePanel = function(piece
     pieceContainer.addEventListener("touchend", touchEndListener);
   }
 
-  TextureManager.getInstance().loadTexture(piece.icon, {
-      textureUpdated: function(image) {
-        image.classList.add("furniture-icon");
-        pieceContainer.appendChild(image);
-      },
-      textureError:  function(error) {
-        console.log("Image cannot be loaded", error);
-      }
-    });
+  // With catalogs of 1000+ pieces, requesting every icon up front floods
+  // the browser: load each icon only when its tile nears the viewport
+  var loadIcon = function() {
+      TextureManager.getInstance().loadTexture(piece.icon, {
+          textureUpdated: function(image) {
+            image.classList.add("furniture-icon");
+            pieceContainer.appendChild(image);
+          },
+          textureError:  function(error) {
+            console.log("Image cannot be loaded", error);
+          }
+        });
+    };
+  if (typeof IntersectionObserver === "function") {
+    var iconObserver = new IntersectionObserver(function(entries) {
+        if (entries[0].isIntersecting) {
+          iconObserver.disconnect();
+          loadIcon();
+        }
+      }, {rootMargin: "200px"});
+    iconObserver.observe(pieceContainer);
+  } else {
+    loadIcon();
+  }
 }
 
 /** 
