@@ -176,6 +176,8 @@ class Home3DDashboardPanel extends HTMLElement {
           unit: state.attributes.unit_of_measurement,
           currentTemperature: state.attributes.current_temperature,
           brightness: state.attributes.brightness,
+          colorTempKelvin: state.attributes.color_temp_kelvin,
+          rgbColor: state.attributes.rgb_color,
         };
       }
     }

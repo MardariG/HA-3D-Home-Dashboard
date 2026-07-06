@@ -202,8 +202,9 @@ export function installBindings3D(api) {
           material.color.set(ON_EMISSIVE);
         });
       } else {
+        var glow = lightColor(state);
         overlayItem(targetId, function (material) {
-          material.emissive.set(ON_EMISSIVE);
+          material.emissive.copy(glow);
           material.emissiveIntensity = 0.55;
         });
         setSelfShadow(targetId, false);
@@ -214,6 +215,32 @@ export function installBindings3D(api) {
       setSelfShadow(targetId, true);
       removePointLight(targetId);
     }
+  }
+
+  /** Kelvin -> RGB (Tanner Helland approximation), clamped to 1000-12000K. */
+  function kelvinToColor(kelvin) {
+    var t = Math.min(12000, Math.max(1000, kelvin)) / 100;
+    var r = t <= 66 ? 255
+      : 329.698727446 * Math.pow(t - 60, -0.1332047592);
+    var g = t <= 66
+      ? 99.4708025861 * Math.log(t) - 161.1195681661
+      : 288.1221695283 * Math.pow(t - 60, -0.0755148492);
+    var b = t >= 66 ? 255
+      : (t <= 19 ? 0 : 138.5177312231 * Math.log(t - 10) - 305.0447927307);
+    var clamp255 = function (v) { return Math.min(255, Math.max(0, v)) / 255; };
+    return new THREE.Color(clamp255(r), clamp255(g), clamp255(b));
+  }
+
+  /** The bound light's actual color: rgb_color, else color temp, else warm. */
+  function lightColor(state) {
+    if (state && Array.isArray(state.rgbColor) && state.rgbColor.length === 3) {
+      return new THREE.Color(
+        state.rgbColor[0] / 255, state.rgbColor[1] / 255, state.rgbColor[2] / 255);
+    }
+    if (state && typeof state.colorTempKelvin === 'number') {
+      return kelvinToColor(state.colorTempKelvin);
+    }
+    return new THREE.Color(0xFFC46B);
   }
 
   function ensurePointLight(targetId, piece, state) {
@@ -227,9 +254,15 @@ export function installBindings3D(api) {
         piece.getElevation() + piece.getHeight() * 0.8, piece.getY());
       light.castShadow = true;
       light.shadow.bias = -0.002;
+      // The default shadow camera only covers 500cm: everything farther
+      // got NO shadow data and was lit through walls in distant rooms
+      light.shadow.camera.near = 5;
+      light.shadow.camera.far = Math.max(1000, api.bounds.size * 2);
+      light.shadow.mapSize.set(1024, 1024);
       api.scene.add(light);
       pointLights[targetId] = light;
     }
+    light.color.copy(lightColor(state));
     light.intensity = 60000 * Math.max(0.15, brightness);
   }
 
