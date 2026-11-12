@@ -26,8 +26,9 @@ versions, do the same from HACS.
 On first start the integration downloads the extra furniture libraries
 (~155 MB, the official Sweet Home 3D 1.9.3 libraries) from this repository's
 releases into `<config>/home_3d_dashboard/furniture/`. They are not bundled
-because Marketplace installs are limited to 100 MiB. Until the download
-finishes (or if Home Assistant has no internet access) those catalog items
+because Marketplace installs are limited to 100 MiB. The 3D Dashboard panel
+shows a progress bar while it downloads (with a Retry button if it fails, and
+a Reload button once it's done). Until the download finishes (or if Home Assistant has no internet access) those catalog items
 show without thumbnails and can't be placed; the basic catalog always works.
 
 Then go to **Settings → Devices & Services → Add Integration** → search

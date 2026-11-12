@@ -27,3 +27,5 @@ FURNITURE_PACK_URL = (
     f"v2.5.0/{FURNITURE_PACK_FILENAME}"
 )
 FURNITURE_PACK_SHA256 = "ca95963cd7a52f467ec03c3678e24452c1ec6ad9058ebe17e1a2953e8d907f9f"
+# Archive size in bytes: progress total when the server sends no length.
+FURNITURE_PACK_SIZE = 161672595

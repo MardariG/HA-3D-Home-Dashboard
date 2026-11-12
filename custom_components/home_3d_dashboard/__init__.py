@@ -23,10 +23,16 @@ from homeassistant.components.frontend import (
 )
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.typing import ConfigType
 
-from .furniture import async_ensure_furniture_pack, prepare_pack_dir
+from .furniture import (
+    SIGNAL_FURNITURE_STATUS,
+    STATE_ERROR,
+    FurniturePack,
+    prepare_pack_dir,
+)
 from .furniture_pack_info import FURNITURE_LIBRARIES
 from .http import HomesListView, HomeView
 
@@ -42,6 +48,8 @@ WS_GET = DOMAIN + "/get_mappings"
 WS_SAVE = DOMAIN + "/save_mappings"
 WS_GET_SETTINGS = DOMAIN + "/get_settings"
 WS_SAVE_SETTINGS = DOMAIN + "/save_settings"
+WS_FURNITURE_SUBSCRIBE = DOMAIN + "/furniture/subscribe"
+WS_FURNITURE_RETRY = DOMAIN + "/furniture/retry"
 
 CONFIG_SCHEMA = vol.Schema({DOMAIN: vol.Schema({})}, extra=vol.ALLOW_EXTRA)
 
@@ -85,10 +93,9 @@ async def _setup_integration(hass: HomeAssistant) -> None:
             StaticPathConfig("/com", str(frontend_dir / "com"), True),
         ]
     )
-    hass.async_create_background_task(
-        async_ensure_furniture_pack(hass, pack_dir),
-        f"{DOMAIN} furniture libraries download",
-    )
+    furniture = FurniturePack(hass, pack_dir)
+    hass.data[DOMAIN]["furniture"] = furniture
+    furniture.async_start()
 
     hass.http.register_view(HomesListView(homes_dir))
     hass.http.register_view(HomeView(homes_dir))
@@ -97,6 +104,8 @@ async def _setup_integration(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_save_mappings)
     websocket_api.async_register_command(hass, ws_get_settings)
     websocket_api.async_register_command(hass, ws_save_settings)
+    websocket_api.async_register_command(hass, ws_subscribe_furniture)
+    websocket_api.async_register_command(hass, ws_retry_furniture)
 
     # Custom element panel (frontend/panel.js): unlike an iframe panel it
     # receives the authenticated hass object, which it bridges to the viewer
@@ -202,3 +211,29 @@ async def ws_save_settings(hass, connection, msg):
     hass.data[DOMAIN]["settings"] = msg["settings"]
     await hass.async_add_executor_job(_save_data, hass)
     connection.send_result(msg["id"], {"success": True})
+
+
+@websocket_api.websocket_command({vol.Required("type"): WS_FURNITURE_SUBSCRIBE})
+@callback
+def ws_subscribe_furniture(hass, connection, msg):
+    """Stream the furniture pack status: current value first, then changes."""
+
+    @callback
+    def forward(status):
+        connection.send_message(websocket_api.event_message(msg["id"], status))
+
+    connection.subscriptions[msg["id"]] = async_dispatcher_connect(
+        hass, SIGNAL_FURNITURE_STATUS, forward
+    )
+    connection.send_result(msg["id"])
+    forward(hass.data[DOMAIN]["furniture"].status)
+
+
+@websocket_api.websocket_command({vol.Required("type"): WS_FURNITURE_RETRY})
+@callback
+def ws_retry_furniture(hass, connection, msg):
+    """Retry a failed furniture pack download."""
+    furniture = hass.data[DOMAIN]["furniture"]
+    if furniture.status["state"] == STATE_ERROR:
+        furniture.async_start()
+    connection.send_result(msg["id"])
