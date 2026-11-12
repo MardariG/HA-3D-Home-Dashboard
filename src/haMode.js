@@ -18,8 +18,9 @@ export function addModeToggle(targetPage, label, position) {
   button.href = targetPage;
   button.style.cssText =
     'position:fixed;' + vertical + 'right:10px;z-index:10000;' +
-    'padding:6px 16px;background:#03a9f4;color:#fff;' +
-    'font:600 13px/1.4 system-ui,sans-serif;text-decoration:none;' +
-    'border-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.4);cursor:pointer;';
+    // The editor's HA theme variables (src/editorTheme.css) when present
+    'padding:7px 18px;background:var(--h3d-primary,#03a9f4);color:var(--h3d-on-primary,#fff);' +
+    'font:500 13px/1.4 var(--h3d-font,system-ui,sans-serif);text-decoration:none;' +
+    'border-radius:18px;box-shadow:0 1px 4px rgba(0,0,0,.4);cursor:pointer;';
   document.body.appendChild(button);
 }

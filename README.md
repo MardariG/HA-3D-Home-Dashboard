@@ -61,6 +61,14 @@ sidebar. (Alternatively add `home_3d_dashboard:` to `configuration.yaml`.)
 
   **Advanced editor** switches to the complete Sweet Home 3D editor
   (full catalog, any wall shape, levels, textures) on the same home.
+- **Home Assistant look** — both editors follow your HA theme, including
+  dark mode and custom primary colors. The Advanced editor's toolbar uses
+  Home Assistant's Material Design Icons, with text labels on the drawing
+  tools when there's room, and a ⋮ menu for rarely used actions. Context
+  menus and dialogs are restyled to match, and a tip at the bottom of the
+  plan explains the current drawing tool (turn it off with its ×, back on
+  from the ⋮ menu). The plan itself stays light in dark mode so walls and
+  dimensions stay readable.
 - **Native `.sh3d` files** — stored in `<config>/home_3d_dashboard/`;
   interchange freely with the desktop [Sweet Home 3D](https://www.sweethome3d.com/) app
 - **3D navigation** — orbit, pan, zoom, aerial view and virtual visit modes,
@@ -133,7 +141,9 @@ custom_components/home_3d_dashboard/
 └── frontend/        # output of `npm run build:ha`
 src/                 # webpack entries (editor.js wires DirectHomeRecorder
                      #   to the HA API via the __HA_BUILD__ define;
-                     #   simpleMode.js is the simple editing panel)
+                     #   simpleMode.js is the simple editing panel,
+                     #   advancedUi.js the Advanced editor's toolbar, and
+                     #   editorTheme.js/.css the HA theme and styling)
 public/              # Sweet Home 3D engine: vendor libs, editor sources,
                      #   icons, furniture models (legacy global scripts,
                      #   loaded via <script> tags — see webpack.config.js)
@@ -162,5 +172,6 @@ uploads (~16 MB) — very model-heavy homes may exceed it.
 GPL v2 or later — see [LICENSE](LICENSE). This project bundles the
 [Sweet Home 3D](https://www.sweethome3d.com/) JS engine (GPL, © eTeks /
 Space Mushrooms); it is not affiliated with or endorsed by eTeks.
-Third-party component licenses (Big.js, glMatrix, JSZip, Batik, …) are in
+Third-party component licenses (Big.js, glMatrix, JSZip, Batik, Material
+Design Icons, …) are in
 [`licenses/`](licenses/) and are shipped into the build output.

@@ -1,0 +1,755 @@
+/*
+ * Home Assistant look for the Sweet Home 3D editor: theme colors, a larger
+ * toolbar with Material Design Icons (src/advancedUi.js), and restyled
+ * catalog, furniture list, menus and dialogs.
+ *
+ * Overrides public/vendor/sweethome3djs.css and the inline styles of
+ * public/editor.html. The --h3d-* variables default to HA's light theme;
+ * src/editorTheme.js replaces them with the user's HA theme.
+ */
+
+:root {
+  --h3d-primary: #03a9f4;
+  --h3d-on-primary: #ffffff;
+  --h3d-text: #212121;
+  --h3d-text2: #727272;
+  --h3d-disabled: #bdbdbd;
+  --h3d-bg: #fafafa;
+  --h3d-bg2: #e5e5e5;
+  --h3d-card: #ffffff;
+  --h3d-divider: rgba(0, 0, 0, 0.12);
+  --h3d-error: #db4437;
+  --h3d-success: #43a047;
+  --h3d-warning: #ffa600;
+  --h3d-font: Roboto, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --h3d-border: color-mix(in srgb, var(--h3d-text) 24%, transparent);
+  --h3d-hover: color-mix(in srgb, var(--h3d-text) 8%, transparent);
+  --h3d-primary-tint: color-mix(in srgb, var(--h3d-primary) 18%, transparent);
+  --h3d-success-tint: color-mix(in srgb, var(--h3d-success) 14%, transparent);
+  --h3d-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+  --h3d-toolbar-height: 48px;
+
+  color-scheme: light;
+  accent-color: var(--h3d-primary);
+}
+
+:root.h3d-dark {
+  color-scheme: dark;
+  --h3d-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
+}
+
+/* sweethome3djs.css colors every element #404040 */
+* {
+  color: var(--h3d-text);
+}
+
+body {
+  background-color: var(--h3d-bg);
+  font-family: var(--h3d-font);
+}
+
+button:disabled {
+  color: var(--h3d-disabled);
+}
+
+/* The plan stays light in dark themes: its text color, read once when the
+ * plan is created, is the color walls, labels and dimensions are drawn in. */
+#home-plan,
+#home-plan * {
+  color: #404040;
+}
+
+#home-plan {
+  background-color: #ffffff;
+  border-color: var(--h3d-divider) !important;
+}
+
+#home-3D-view {
+  border-color: var(--h3d-divider) !important;
+}
+
+#level-selector,
+#home-plan #level-selector {
+  font: 13px var(--h3d-font);
+  color: #212121;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.24);
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+
+/* ------------------------------- toolbar -------------------------------- */
+
+#home-pane-toolbar,
+#application-menu-toolbar {
+  display: flex;
+  align-items: center;
+  background: var(--h3d-card);
+  font-family: var(--h3d-font);
+  scrollbar-width: none;
+}
+
+#home-pane-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  #home-pane-toolbar {
+    height: var(--h3d-toolbar-height);
+    padding: 0 6px;
+    border-bottom: 1px solid var(--h3d-divider);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  #catalog-furniture-pane,
+  #furniture-plan-splitter,
+  #plan-3D-view-pane {
+    top: var(--h3d-toolbar-height);
+    height: calc(100% - var(--h3d-toolbar-height));
+  }
+}
+
+#home-pane-toolbar .h3d-group {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+  padding: 0 6px;
+  border-right: 1px solid var(--h3d-divider);
+  box-sizing: border-box;
+}
+
+#home-pane-toolbar .h3d-group:last-child {
+  border-right: 0;
+}
+
+#home-pane-toolbar .h3d-spacer {
+  flex: 1 1 0;
+  min-width: 8px;
+}
+
+#home-pane-toolbar .toolbar-button,
+#application-menu-toolbar .toolbar-button,
+#h3d-more-menu .toolbar-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: auto;
+  min-width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 8px;
+  background-color: transparent;
+  background-image: none !important;
+  color: var(--h3d-text);
+  font: 500 13px/1 var(--h3d-font);
+  white-space: nowrap;
+  cursor: pointer;
+  opacity: 1;
+  filter: none;
+  box-sizing: border-box;
+}
+
+#home-pane-toolbar .toolbar-button:hover,
+#application-menu-toolbar .toolbar-button:hover,
+#h3d-more-menu .toolbar-button:hover {
+  background-color: var(--h3d-hover);
+  border-color: transparent;
+}
+
+#home-pane-toolbar .toolbar-button.selected,
+#home-pane-toolbar .toolbar-button.selected:hover {
+  background-color: var(--h3d-primary-tint);
+  color: var(--h3d-primary);
+}
+
+#home-pane-toolbar .toolbar-button:disabled,
+#home-pane-toolbar .toolbar-button:disabled:hover,
+#h3d-more-menu .toolbar-button:disabled,
+#h3d-more-menu .toolbar-button:disabled:hover {
+  background-color: transparent;
+  color: var(--h3d-disabled);
+  cursor: default;
+  filter: none;
+  opacity: 1;
+}
+
+.h3d-ico {
+  display: inline-block;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  background-color: currentColor;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  pointer-events: none;
+}
+
+/* Text labels on the drawing tools when there is room for them
+ * (src/advancedUi.js sets h3d-compact when they would overflow) */
+.toolbar-button .h3d-label {
+  display: none;
+  color: inherit;
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  #home-pane-toolbar:not(.h3d-compact) .toolbar-button.h3d-labeled {
+    padding: 0 10px 0 8px;
+  }
+
+  #home-pane-toolbar:not(.h3d-compact) .toolbar-button.h3d-labeled .h3d-label {
+    display: inline;
+  }
+}
+
+#home-pane-toolbar .h3d-switch {
+  flex: none;
+  height: 32px;
+  margin-left: 4px;
+  padding: 0 14px;
+  border: 1px solid var(--h3d-primary);
+  border-radius: 16px;
+  background: transparent;
+  color: var(--h3d-primary);
+  font: 500 13px/1 var(--h3d-font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+#home-pane-toolbar .h3d-switch:hover {
+  background: var(--h3d-primary-tint);
+}
+
+/* Touch layout: toolbar along the bottom edge */
+@media (hover: none), (pointer: coarse) {
+  #home-pane-toolbar,
+  #application-menu-toolbar {
+    border-top: 1px solid var(--h3d-divider);
+  }
+
+  #home-pane-toolbar .h3d-group {
+    padding: 0 4px;
+  }
+}
+
+/* "More" menu */
+#h3d-more-menu {
+  position: fixed;
+  z-index: 1001;
+  display: none;
+  flex-direction: column;
+  min-width: 230px;
+  max-height: 75vh;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--h3d-divider);
+  border-radius: 12px;
+  background: var(--h3d-card);
+  box-shadow: var(--h3d-shadow);
+  box-sizing: border-box;
+}
+
+#h3d-more-menu.open {
+  display: flex;
+}
+
+#h3d-more-menu .toolbar-button {
+  justify-content: flex-start;
+  width: 100%;
+  gap: 12px;
+  padding: 0 10px;
+  font-weight: 400;
+  font-size: 14px;
+}
+
+#h3d-more-menu .toolbar-button .h3d-label {
+  display: inline;
+  flex: 1;
+  text-align: left;
+}
+
+#h3d-more-menu .toolbar-button.selected {
+  color: var(--h3d-primary);
+  background-color: transparent;
+}
+
+#h3d-more-menu .toolbar-button.selected::after {
+  content: "\2713";
+  color: var(--h3d-primary);
+}
+
+#h3d-more-menu .h3d-sep {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--h3d-divider);
+  flex: none;
+}
+
+/* ------------------------------ tool hints ------------------------------ */
+
+#h3d-hint {
+  position: fixed;
+  z-index: 30;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 6px 14px;
+  border-radius: 18px;
+  background: rgba(33, 33, 33, 0.88);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  font: 13px/1.4 var(--h3d-font);
+  box-sizing: border-box;
+}
+
+#h3d-hint.on {
+  display: flex;
+}
+
+#h3d-hint,
+#h3d-hint * {
+  color: #ffffff;
+}
+
+#h3d-hint button {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  font: 16px/24px var(--h3d-font);
+  cursor: pointer;
+}
+
+#h3d-hint button:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+body.h3d-simple #h3d-hint,
+body.h3d-simple #h3d-more-menu {
+  display: none !important;
+}
+
+/* ----------------------------- side panes ------------------------------- */
+
+#catalog-furniture-pane {
+  border: 0;
+  border-right: 1px solid var(--h3d-divider);
+  background-color: var(--h3d-card);
+}
+
+.furniture-catalog-list {
+  border-top: 1px solid var(--h3d-divider);
+  background-color: var(--h3d-card);
+}
+
+.furniture-category-label {
+  box-sizing: border-box;
+  margin-bottom: 4px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--h3d-divider);
+  background-color: var(--h3d-bg);
+  color: var(--h3d-text2);
+  font: 500 12px/1.2 var(--h3d-font);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.furniture {
+  border-radius: 8px;
+  background-color: transparent;
+  cursor: pointer;
+}
+
+.furniture:hover {
+  background-color: var(--h3d-hover);
+}
+
+.furniture.selected,
+.furniture.selected > .furniture-label {
+  background-color: var(--h3d-primary-tint);
+}
+
+.furniture > .furniture-label {
+  color: var(--h3d-text);
+  font-family: var(--h3d-font);
+  background-color: transparent;
+}
+
+/* Bigger thumbnails, except in the phone layouts' narrow catalog strips */
+@media (min-width: 744px) and (min-height: 512px) {
+  .furniture {
+    width: 86px;
+    height: 100px;
+    margin: 3px 2px;
+    vertical-align: top;
+  }
+
+  .furniture > .furniture-icon {
+    top: 4px;
+    width: 64px;
+    margin-left: 11px;
+    margin-right: 11px;
+  }
+
+  .furniture > .furniture-label {
+    bottom: 4px;
+    width: 86px;
+    padding: 0 3px;
+    box-sizing: border-box;
+    font-size: 11px;
+    line-height: 1.2;
+  }
+}
+
+.furniture-tooltip {
+  padding: 6px 8px;
+  border: 1px solid var(--h3d-divider);
+  border-radius: 8px;
+  background-color: var(--h3d-card);
+  box-shadow: var(--h3d-shadow);
+  color: var(--h3d-text);
+  font: 12px/1.4 var(--h3d-font);
+}
+
+.furniture-tooltip * {
+  color: var(--h3d-text);
+}
+
+#furniture-filter > * {
+  box-sizing: border-box;
+}
+
+#furniture-search-field,
+#furniture-category-select {
+  min-height: 32px;
+  border: 1px solid var(--h3d-border);
+  border-radius: 8px;
+  background-color: var(--h3d-card);
+  color: var(--h3d-text);
+  font: 13px var(--h3d-font);
+}
+
+#furniture-category-select {
+  padding: 0 6px;
+}
+
+#furniture-search-field {
+  padding-left: 30px;
+  background-position: 8px center;
+  background-size: 18px 18px;
+  background-repeat: no-repeat;
+}
+
+#furniture-search-field:focus,
+#furniture-category-select:focus {
+  outline: 2px solid var(--h3d-primary);
+  outline-offset: -1px;
+}
+
+/* Gives the catalog more room than the furniture list by default (a
+ * position saved by dragging the splitter still wins: it is inline) */
+@media (hover: hover) and (pointer: fine) {
+  #furniture-catalog {
+    height: 74%;
+  }
+
+  #catalog-furniture-splitter {
+    top: 74%;
+  }
+
+  #furniture-view {
+    top: calc(74% + 4px);
+    height: calc(26% - 4px);
+  }
+}
+
+.pane-splitter,
+.pane-splitter.horizontal,
+.pane-splitter.vertical {
+  background: var(--h3d-bg2);
+}
+
+.pane-splitter.horizontal:hover,
+.pane-splitter.vertical:hover,
+.pane-splitter.horizontal.moving,
+.pane-splitter.vertical.moving {
+  background: var(--h3d-primary);
+}
+
+/* Furniture list */
+#furniture-view {
+  background-color: var(--h3d-card);
+}
+
+.tree-table {
+  font: 13px var(--h3d-font);
+}
+
+.tree-table [header] {
+  height: 2.2em;
+  border-bottom: 1px solid var(--h3d-divider);
+  background-color: var(--h3d-bg);
+  font-size: 1em;
+}
+
+.tree-table [header] [cell] {
+  padding-top: 0.5em;
+  color: var(--h3d-text2);
+  font-weight: 500;
+}
+
+.tree-table [header] [cell]:hover:not(.sort.descending),
+.tree-table [header] [cell].sort:not(:hover) {
+  background-color: var(--h3d-hover);
+}
+
+.tree-table [body] {
+  height: calc(100% - 2.2em);
+}
+
+.tree-table [body] [row] {
+  align-items: center;
+  min-height: 1.9em;
+  height: 1.9em;
+}
+
+.tree-table [body] [row]:hover {
+  background-color: var(--h3d-hover);
+}
+
+.tree-table [row].selected,
+.tree-table [row].selected:hover {
+  background-color: var(--h3d-primary-tint);
+}
+
+.h3d-dark .tree-table [header] [cell]::after,
+.h3d-dark .tree-table .group [cell].main::before {
+  filter: invert(1);
+}
+
+/* ---------------------------- popup menus ------------------------------- */
+
+.popup-menu,
+.popup-menu .sub-menu:hover > .items,
+.popup-menu .sub-menu > .items.visible {
+  padding: 4px 0;
+  border: 1px solid var(--h3d-divider);
+  border-radius: 10px;
+  background-color: var(--h3d-card);
+  box-shadow: var(--h3d-shadow);
+}
+
+.popup-menu {
+  font: 14px var(--h3d-font);
+}
+
+.popup-menu .item {
+  margin: 0 4px;
+  padding: 5px 28px 5px 8px;
+  border-radius: 6px;
+  line-height: 22px;
+}
+
+.popup-menu .item:hover {
+  border-radius: 6px;
+  background-color: var(--h3d-hover);
+  color: var(--h3d-text);
+}
+
+.popup-menu .item .icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 10px;
+  padding: 0;
+  vertical-align: middle;
+  line-height: 20px;
+  text-align: center;
+}
+
+.popup-menu .item.checkable.selected .icon {
+  background-color: transparent;
+  color: var(--h3d-primary);
+}
+
+.popup-menu .separator {
+  margin: 4px 0;
+  border-bottom: 1px solid var(--h3d-divider);
+}
+
+.popup-menu .sub-menu::after {
+  top: 50%;
+  margin-top: -0.5em;
+  border-left-color: var(--h3d-text2);
+}
+
+/* ------------------------------- dialogs -------------------------------- */
+
+.dialog-container {
+  background-color: rgba(0, 0, 0, 0.45);
+  font-family: var(--h3d-font);
+}
+
+.dialog-content {
+  border: 0;
+  background-color: var(--h3d-card);
+  box-shadow: var(--h3d-shadow);
+}
+
+.dialog-container.visible .dialog-content {
+  border-radius: 16px;
+}
+
+.dialog-content .dialog-top {
+  padding: 0 52px 0 24px;
+  border-bottom: 1px solid var(--h3d-divider);
+  background-color: var(--h3d-card);
+  font-size: 17px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dialog-content .dialog-close-button {
+  top: 0;
+  right: 14px;
+  color: var(--h3d-text2);
+  font-weight: 400;
+}
+
+.dialog-content .dialog-close-button:hover,
+.dialog-content .dialog-close-button:focus {
+  color: var(--h3d-text);
+}
+
+.dialog-body,
+.dialog-content .dialog-buttons {
+  background-color: var(--h3d-card);
+}
+
+.dialog-body div.card {
+  border: 1px solid var(--h3d-divider);
+  border-radius: 12px;
+  background-color: var(--h3d-bg);
+}
+
+.dialog-body h3 {
+  border-bottom-color: var(--h3d-divider);
+  font-weight: 500;
+}
+
+.dialog-content .dialog-buttons {
+  border-top: 1px solid var(--h3d-divider);
+  text-align: right;
+}
+
+.dialog-content .dialog-buttons button {
+  min-width: 84px;
+  height: 34px;
+  margin: 0 0 0 8px;
+  padding: 0 18px;
+  border: 1px solid var(--h3d-border);
+  border-radius: 17px;
+  background: transparent;
+  color: var(--h3d-primary);
+  font: 500 14px/1 var(--h3d-font);
+  cursor: pointer;
+}
+
+.dialog-content .dialog-buttons button:hover {
+  background: var(--h3d-primary-tint);
+}
+
+.dialog-content .dialog-buttons button.default-capable {
+  border-color: var(--h3d-primary);
+  background: var(--h3d-primary);
+  color: var(--h3d-on-primary);
+}
+
+.dialog-content .dialog-buttons button.default-capable:hover {
+  background: color-mix(in srgb, var(--h3d-primary) 88%, #000000);
+}
+
+.dialog-content .dialog-buttons button:disabled {
+  border-color: var(--h3d-divider);
+  background: transparent;
+  color: var(--h3d-disabled);
+  cursor: default;
+}
+
+.dialog-content .default-capable {
+  outline: none;
+}
+
+.dialog-body :not(.spinner) > input:not([type="radio"]):not([type="checkbox"]):not([type="range"]),
+.dialog-body select,
+.dialog-body textarea,
+.spinner input[type="text"] {
+  padding: 3px 6px;
+  border: 1px solid var(--h3d-border);
+  border-radius: 6px;
+  background-color: var(--h3d-card);
+  color: var(--h3d-text);
+  font: 13px var(--h3d-font);
+  box-sizing: border-box;
+}
+
+.dialog-body :not(.spinner) > input:not([type="radio"]):not([type="checkbox"]):not([type="range"]):focus,
+.dialog-body select:focus,
+.dialog-body textarea:focus,
+.spinner input[type="text"]:focus {
+  outline: 2px solid var(--h3d-primary);
+  outline-offset: -1px;
+}
+
+/* Other dialog buttons ("Modify…", color and texture buttons) */
+.dialog-body button:not([increment]):not([decrement]) {
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--h3d-border);
+  border-radius: 6px;
+  background-color: var(--h3d-card);
+  color: var(--h3d-text);
+  font: 13px var(--h3d-font);
+}
+
+.dialog-body button:not([increment]):not([decrement]):not(:disabled):hover {
+  border-color: var(--h3d-primary);
+}
+
+.spinner {
+  height: 1.75rem;
+}
+
+.spinner input[type="text"] {
+  border-radius: 6px 0 0 6px;
+}
+
+.spinner button {
+  border-color: var(--h3d-border);
+  color: var(--h3d-text);
+}
+
+.spinner button:hover {
+  background: var(--h3d-hover);
+}
+
+.spinner button:active {
+  background: var(--h3d-primary-tint);
+}

@@ -11,6 +11,7 @@
  *                     sh3d-toggle        {entityId}
  *                     sh3d-save-mappings {mappings: {pieceId: entityId}}
  *   panel -> iframe : sh3d-config        {accessToken} (re-sent on refresh)
+ *                     sh3d-theme         {dark, font, vars} (HA theme, re-sent on change)
  *                     sh3d-init          {mappings, entities, areas, floors}
  *                     sh3d-states        {states: {entityId: state}}
  *
@@ -24,6 +25,13 @@
  */
 
 const FRONTEND_URL = '/home_3d_dashboard-frontend';
+// HA theme variables forwarded to the editor (see src/editorTheme.js)
+const THEME_VARIABLES = [
+  'primary-color', 'text-primary-color', 'primary-text-color',
+  'secondary-text-color', 'disabled-text-color', 'primary-background-color',
+  'secondary-background-color', 'card-background-color', 'divider-color',
+  'error-color', 'success-color', 'warning-color',
+];
 const BINDABLE_DOMAINS =
   /^(light|switch|fan|cover|lock|media_player|climate|input_boolean|scene|script|vacuum|sensor)\./;
 
@@ -42,6 +50,8 @@ class Home3DDashboardPanel extends HTMLElement {
     this._furnitureBusySeen = false;
     this._furnitureDismissed = false;
     this._furnitureEl = null;
+    this._lastThemes = null;
+    this._lastThemeJson = null;
     this._onMessage = this._onMessage.bind(this);
   }
 
@@ -54,6 +64,11 @@ class Home3DDashboardPanel extends HTMLElement {
     } else if (this._lastToken !== null && this._accessToken() !== this._lastToken) {
       // Frontend refreshed its access token: keep the iframe's copy current
       this._sendConfig();
+    }
+    if (hass.themes !== this._lastThemes) {
+      // The theme's CSS variables apply after this update: read them next frame
+      this._lastThemes = hass.themes;
+      requestAnimationFrame(() => this._sendTheme(false));
     }
     if (this._viewerReady && !this._initSent) {
       this._sendInit();
@@ -69,7 +84,35 @@ class Home3DDashboardPanel extends HTMLElement {
 
   _sendConfig() {
     this._lastToken = this._accessToken();
+    this._sendTheme(true);
     this._post({ type: 'sh3d-config', accessToken: this._lastToken });
+  }
+
+  // Sends the HA theme (colors, font, dark mode) so the editor matches it.
+  // An unchanged theme is only re-sent when `force` (page (re)load).
+  _sendTheme(force) {
+    if (!this._hass) {
+      return;
+    }
+    const style = getComputedStyle(this);
+    const vars = {};
+    THEME_VARIABLES.forEach((name) => {
+      const value = style.getPropertyValue('--' + name).trim();
+      if (value) {
+        vars[name] = value;
+      }
+    });
+    const msg = {
+      type: 'sh3d-theme',
+      dark: !!(this._hass.themes && this._hass.themes.darkMode),
+      font: style.fontFamily || '',
+      vars,
+    };
+    const json = JSON.stringify(msg);
+    if (force || json !== this._lastThemeJson) {
+      this._lastThemeJson = json;
+      this._post(msg);
+    }
   }
 
   set panel(panel) {
