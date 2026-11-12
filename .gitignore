@@ -12,3 +12,8 @@ __pycache__/
 *.swp
 *.swo
 Thumbs.db
+
+# Furniture library pack: built by scripts/build-furniture-pack.py and
+# published as a release asset, downloaded at runtime by the integration.
+furniture-pack/
+dist-pack/

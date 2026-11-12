@@ -292,7 +292,14 @@ module.exports = (env, argv) => {
     ],
 
     devServer: {
-      static: [{ directory: path.resolve(__dirname, 'public') }],
+      static: [
+        { directory: path.resolve(__dirname, 'public') },
+        // Imported furniture libraries (gitignored, see
+        // scripts/build-furniture-pack.py); the HA integration downloads
+        // them at runtime and serves them under the same URL.
+        { directory: path.resolve(__dirname, 'furniture-pack'),
+          publicPath: '/com/eteks/sweethome3d/io/resources' }
+      ],
       port: 8080,
       hot: false,
       liveReload: true,

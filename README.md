@@ -12,13 +12,23 @@ v2 replaces the old Three.js viewer + Python `.sh3d` converter with the full
 furniture right in HA, and homes are saved as standard `.sh3d` files in your
 config directory.
 
-## Quick Install via HACS
+## Install via the Marketplace (or HACS)
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=MardariG&repository=HA-3D-Home-Dashboard&category=integration)
 
-Or manually: HACS → three-dot menu → **Custom repositories** → paste
-`https://github.com/MardariG/HA-3D-Home-Dashboard` → select **Integration** →
-**Install** → restart Home Assistant.
+On Home Assistant 2026.11+ the link opens the built-in **Marketplace**
+(HACS became the Marketplace; existing HACS installs migrate automatically).
+Or manually: **Settings → Marketplace** → three-dot menu → **Custom
+repositories** → paste `https://github.com/MardariG/HA-3D-Home-Dashboard` →
+type **Integration** → **Install** → restart Home Assistant. On older
+versions, do the same from HACS.
+
+On first start the integration downloads the extra furniture libraries
+(~155 MB, the official Sweet Home 3D 1.9.3 libraries) from this repository's
+releases into `<config>/home_3d_dashboard/furniture/`. They are not bundled
+because Marketplace installs are limited to 100 MiB. Until the download
+finishes (or if Home Assistant has no internet access) those catalog items
+show without thumbnails and can't be placed; the basic catalog always works.
 
 Then go to **Settings → Devices & Services → Add Integration** → search
 **3D Home Dashboard** → **Submit**. A **3D Dashboard** item appears in the
@@ -74,7 +84,13 @@ it consumes the prebuilt JSweet output in `public/vendor/`):
 
 - `npm install` — installs webpack + plugins
 - `npm run build:ha` — builds the panel into
-  `custom_components/home_3d_dashboard/frontend/` (committed, so HACS ships it)
+  `custom_components/home_3d_dashboard/frontend/` (committed, so the
+  Marketplace ships it)
+- `node scripts/import-sh3f.js <dir>` — imports official `.sh3f` furniture
+  libraries into the gitignored `furniture-pack/`;
+  `python scripts/build-furniture-pack.py` zips it into `dist-pack/` for
+  upload to a release, and prints the SHA-256 to pin in
+  `custom_components/home_3d_dashboard/furniture_pack_info.py`
 - `docker compose up -d` — spins up a disposable Home Assistant with the
   integration bind-mounted (see comments in `docker-compose.yml`; state
   lives in the gitignored `.ha-test/`)

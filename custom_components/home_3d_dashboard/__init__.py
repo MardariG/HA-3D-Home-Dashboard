@@ -26,6 +26,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 
+from .furniture import async_ensure_furniture_pack, prepare_pack_dir
+from .furniture_pack_info import FURNITURE_LIBRARIES
 from .http import HomesListView, HomeView
 
 _LOGGER = logging.getLogger(__name__)
@@ -34,6 +36,7 @@ DOMAIN = "home_3d_dashboard"
 STORAGE_KEY = "home_3d_dashboard_mappings"
 FRONTEND_URL = "/home_3d_dashboard-frontend"
 PANEL_URL_PATH = "home-3d-dashboard"
+RESOURCES_URL = "/com/eteks/sweethome3d/io/resources"
 
 WS_GET = DOMAIN + "/get_mappings"
 WS_SAVE = DOMAIN + "/save_mappings"
@@ -52,8 +55,10 @@ async def _setup_integration(hass: HomeAssistant) -> None:
     hass.data[DOMAIN]["_setup_done"] = True
 
     homes_dir = Path(hass.config.path(DOMAIN))
+    pack_dir = homes_dir / "furniture"
     frontend_dir = Path(__file__).parent / "frontend"
     await hass.async_add_executor_job(_init_homes_dir, homes_dir, frontend_dir)
+    await hass.async_add_executor_job(prepare_pack_dir, pack_dir)
     await hass.async_add_executor_job(_load_data, hass)
     # Heavy immutable assets (engine scripts, icons, 3D models) get long
     # cache headers; only the HTML shells stay uncached so upgrades land.
@@ -68,9 +73,21 @@ async def _setup_integration(hass: HomeAssistant) -> None:
             StaticPathConfig(FRONTEND_URL, str(frontend_dir), False),
             # The furniture catalog addresses its 3D models and thumbnails
             # with absolute document-root URLs (/com/eteks/...), so that
-            # folder must also be reachable at the server root.
+            # folder must also be reachable at the server root. The imported
+            # libraries live in the downloaded pack (see furniture.py) and
+            # are served under the same URLs, ahead of the bundled folder.
+            *(
+                StaticPathConfig(
+                    f"{RESOURCES_URL}/{library}", str(pack_dir / library), True
+                )
+                for library in FURNITURE_LIBRARIES
+            ),
             StaticPathConfig("/com", str(frontend_dir / "com"), True),
         ]
+    )
+    hass.async_create_background_task(
+        async_ensure_furniture_pack(hass, pack_dir),
+        f"{DOMAIN} furniture libraries download",
     )
 
     hass.http.register_view(HomesListView(homes_dir))

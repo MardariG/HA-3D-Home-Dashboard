@@ -7,11 +7,14 @@
  * For each library:
  *  - parses PluginFurnitureCatalog.properties (Java .properties format,
  *    ISO-8859-1 with \uXXXX escapes),
- *  - repackages every model as /com/eteks/sweethome3d/io/resources/<lib>/
- *    <base>.zip whose main OBJ is renamed to <base>.obj — the convention
+ *  - repackages every model as furniture-pack/<lib>/<base>.zip (served at
+ *    /com/eteks/sweethome3d/io/resources/<lib>/<base>.zip) whose main OBJ
+ *    is renamed to <base>.obj — the convention
  *    DefaultFurnitureCatalog.js getContent() relies on (jar:<zip>!/<base>.obj),
  *    with all sibling files (mtl, textures) alongside,
  *  - extracts the icon as <base>.png,
+ *  - (the libraries are too big to commit: furniture-pack/ is gitignored and
+ *    shipped as a release asset, see scripts/build-furniture-pack.py),
  *  - appends the catalog keys to public/vendor/resources/
  *    DefaultFurnitureCatalog.json with renumbered indices.
  *
@@ -25,7 +28,7 @@ const AdmZip = require('adm-zip');
 
 const ROOT = path.resolve(__dirname, '..');
 const CATALOG_PATH = path.join(ROOT, 'public/vendor/resources/DefaultFurnitureCatalog.json');
-const RESOURCES_DIR = path.join(ROOT, 'public/com/eteks/sweethome3d/io/resources');
+const RESOURCES_DIR = path.join(ROOT, 'furniture-pack');
 const URL_BASE = '/com/eteks/sweethome3d/io/resources';
 
 /* ------------------------- java properties parser ------------------------ */
