@@ -38,6 +38,7 @@
 import { addModeToggle } from './haMode.js';
 import { installZipRequestDeduplication } from './zipDedupe.js';
 import { installEditorBindings } from './editorBindings.js';
+import { installSimpleMode } from './simpleMode.js';
 import { installAuthXhr, requestPanelConfig, getAccessToken } from './haAuth.js';
 
 function initEditor() {
@@ -125,10 +126,24 @@ function initEditor() {
       this.configuration.__haAccessToken = getAccessToken();
       return originalWriteHome.call(this, home, 'default', observer);
     };
-
-    // Entity binding authoring (select a piece, then "Bind entity").
-    installEditorBindings(application);
   }
+
+  // Entity binding authoring (right-click a piece, then "Bind to entity…").
+  // Outside the HA panel the bridge stays empty.
+  var bridge = installEditorBindings(application);
+
+  // Simple editing mode (src/simpleMode.js), once the home and its views exist
+  var simpleModeWaiter = setInterval(function () {
+    if (application.getHomes().length > 0) {
+      clearInterval(simpleModeWaiter);
+      try {
+        installSimpleMode(application, bridge);
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[3d-dashboard] simple mode unavailable', e);
+      }
+    }
+  }, 100);
 
   // In the HA build homes are addressed by NAME (formatted into readHomeURL
   // by DirectHomeRecorder); in the plain web build by direct URL.

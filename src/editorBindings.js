@@ -10,17 +10,53 @@
  * window.__sh3dAppendBindMenuItem hook that HomePane's popup builders call.
  * Mappings are keyed by the piece's persistent id, which survives saves.
  *
- * Does nothing when not embedded in the HA panel.
+ * Returns a small bridge (entities, HA areas/floors, mappings) that the
+ * simple editing mode (src/simpleMode.js) builds on. When not embedded in
+ * the HA panel the bridge is empty and bindings are disabled.
  */
 
 export function installEditorBindings(application) {
-  if (window.parent === window) {
-    return;
-  }
-
   var entities = [];
+  var areas = [];
+  var floors = [];
   var mappings = {};
   var bridgeReady = false;
+  var initListeners = [];
+
+  var bridge = {
+    isReady: function () { return bridgeReady; },
+    getEntities: function () { return entities; },
+    getAreas: function () { return areas; },
+    getFloors: function () { return floors; },
+    getMappings: function () { return mappings; },
+    onInit: function (listener) {
+      initListeners.push(listener);
+      if (bridgeReady) {
+        listener();
+      }
+    },
+    // Binds targetId (piece or room id) to entityId, or unbinds when
+    // entityId is falsy, and persists the mappings.
+    setMapping: function (targetId, entityId) {
+      if (!bridgeReady) {
+        return;
+      }
+      if (entityId) {
+        mappings[targetId] = entityId;
+      } else {
+        delete mappings[targetId];
+      }
+      pruneOrphanMappings();
+      post({ type: 'sh3d-save-mappings', mappings: mappings });
+    },
+    showPicker: function (item) {
+      showPicker(item);
+    }
+  };
+
+  if (window.parent === window) {
+    return bridge;
+  }
 
   function post(msg) {
     window.parent.postMessage(msg, window.location.origin);
@@ -35,8 +71,11 @@ export function installEditorBindings(application) {
     }
     if (ev.data.type === 'sh3d-init') {
       entities = ev.data.entities || [];
+      areas = ev.data.areas || [];
+      floors = ev.data.floors || [];
       mappings = ev.data.mappings || {};
       bridgeReady = true;
+      initListeners.forEach(function (listener) { listener(); });
     }
     // sh3d-states is ignored in the editor: no live tinting while authoring
   });
@@ -202,13 +241,7 @@ export function installEditorBindings(application) {
     actions.appendChild(pickerButton('Cancel', '#455a64', hidePicker));
     if (select !== null) {
       actions.appendChild(pickerButton('Save', '#03a9f4', function () {
-        if (select.value) {
-          mappings[pieceId] = select.value;
-        } else {
-          delete mappings[pieceId];
-        }
-        pruneOrphanMappings();
-        post({ type: 'sh3d-save-mappings', mappings: mappings });
+        bridge.setMapping(pieceId, select.value);
         hidePicker();
         showToast(select.value
           ? 'Bound to ' + select.value + ' — switch to View to use it.'
@@ -257,4 +290,6 @@ export function installEditorBindings(application) {
       }
     }, 4000);
   }
+
+  return bridge;
 }

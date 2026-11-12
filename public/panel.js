@@ -11,7 +11,7 @@
  *                     sh3d-toggle        {entityId}
  *                     sh3d-save-mappings {mappings: {pieceId: entityId}}
  *   panel -> iframe : sh3d-config        {accessToken} (re-sent on refresh)
- *                     sh3d-init          {mappings, entities}
+ *                     sh3d-init          {mappings, entities, areas, floors}
  *                     sh3d-states        {states: {entityId: state}}
  *
  * The panel also subscribes to home_3d_dashboard/furniture/subscribe and
@@ -304,17 +304,51 @@ class Home3DDashboardPanel extends HTMLElement {
       console.error('[home_3d_dashboard] get_mappings failed', err);
       this._mappings = {};
     }
+    const registry = this._hass.entities || {};
+    const devices = this._hass.devices || {};
     const entities = Object.keys(this._hass.states)
       .filter((id) => BINDABLE_DOMAINS.test(id))
       .sort()
-      .map((id) => ({
-        entity_id: id,
-        name: this._hass.states[id].attributes.friendly_name || id,
-      }));
+      .map((id) => {
+        const attributes = this._hass.states[id].attributes;
+        const entry = registry[id];
+        if (entry && entry.hidden) {
+          return null;
+        }
+        const device = entry && entry.device_id ? devices[entry.device_id] : null;
+        return {
+          entity_id: id,
+          name: attributes.friendly_name || id,
+          // An entity's own area overrides its device's area
+          area_id: (entry && entry.area_id) || (device && device.area_id) || null,
+          device_class: attributes.device_class || null,
+          unit: attributes.unit_of_measurement || null,
+        };
+      })
+      .filter(Boolean);
+    // Floors and areas let the editor's simple mode offer "your rooms"
+    // (hass.floors/areas exist since HA 2024.4; older versions send none).
+    const areas = Object.values(this._hass.areas || {})
+      .map((area) => ({
+        area_id: area.area_id,
+        name: area.name,
+        floor_id: area.floor_id || null,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const floors = Object.values(this._hass.floors || {})
+      .map((floor) => ({
+        floor_id: floor.floor_id,
+        name: floor.name,
+        level: typeof floor.level === 'number' ? floor.level : null,
+      }))
+      .sort((a, b) => (a.level ?? 0) - (b.level ?? 0) || a.name.localeCompare(b.name));
     console.info('[3d-dashboard] init sent: '
       + Object.keys(this._mappings).length + ' mapping(s), '
-      + entities.length + ' bindable entities');
-    this._post({ type: 'sh3d-init', mappings: this._mappings, entities });
+      + entities.length + ' bindable entities, '
+      + areas.length + ' area(s), ' + floors.length + ' floor(s)');
+    this._post({
+      type: 'sh3d-init', mappings: this._mappings, entities, areas, floors,
+    });
     this._lastStatesJson = null;
     this._pushStates();
   }
