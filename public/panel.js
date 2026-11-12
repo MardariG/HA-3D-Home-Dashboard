@@ -71,7 +71,10 @@ class Home3DDashboardPanel extends HTMLElement {
     if (this._iframe) {
       return;
     }
-    this.style.cssText = 'display:block;height:100%;';
+    // Size to the viewport, not the parent: HA's panel container has no
+    // definite height, so `height:100%` collapses and the iframe falls back
+    // to its 150px default. dvh (with a vh fallback) tracks mobile toolbars.
+    this.style.cssText = 'display:block;height:100vh;height:100dvh;overflow:hidden;';
     this._iframe = document.createElement('iframe');
     this._iframe.src = `${FRONTEND_URL}/index.html`;
     this._iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;';
