@@ -9,8 +9,9 @@
  *   iframe -> panel : sh3d-hello         (page boot: request config)
  *                     sh3d-ready         (home loaded: request init)
  *                     sh3d-toggle        {entityId}
- *                     sh3d-save-mappings {mappings: {pieceId: entityId}}
- *   panel -> iframe : sh3d-config        {accessToken} (re-sent on refresh)
+ *                     sh3d-save-mappings {mappings: {pieceId: entityId}, home}
+ *                     sh3d-active-home   {home} (editor opened/created a home)
+ *   panel -> iframe : sh3d-config        {accessToken, home} (re-sent on refresh)
  *                     sh3d-theme         {dark, font, vars} (HA theme, re-sent on change)
  *                     sh3d-init          {mappings, entities, areas, floors}
  *                     sh3d-states        {states: {entityId: state}}
@@ -19,9 +20,10 @@
  * overlays a progress bar while the furniture libraries download on first
  * start (see custom_components/home_3d_dashboard/furniture.py).
  *
- * Mappings persist through the integration's websocket commands
- * (home_3d_dashboard/get_mappings, /save_mappings) — same storage format
- * as v1.x.
+ * Mappings persist per home through the integration's websocket commands
+ * (home_3d_dashboard/get_mappings, /save_mappings); the "default" home keeps
+ * the v1.x storage format. The active home (the one the viewer and editor
+ * open) is home_3d_dashboard/get_active_home, /set_active_home.
  */
 
 const FRONTEND_URL = '/home_3d_dashboard-frontend';
@@ -52,6 +54,7 @@ class Home3DDashboardPanel extends HTMLElement {
     this._furnitureEl = null;
     this._lastThemes = null;
     this._lastThemeJson = null;
+    this._home = null;
     this._onMessage = this._onMessage.bind(this);
   }
 
@@ -60,7 +63,7 @@ class Home3DDashboardPanel extends HTMLElement {
     this._subscribeFurniture();
     if (this._helloPending) {
       this._helloPending = false;
-      this._sendConfig();
+      this._sendFreshConfig();
     } else if (this._lastToken !== null && this._accessToken() !== this._lastToken) {
       // Frontend refreshed its access token: keep the iframe's copy current
       this._sendConfig();
@@ -85,7 +88,20 @@ class Home3DDashboardPanel extends HTMLElement {
   _sendConfig() {
     this._lastToken = this._accessToken();
     this._sendTheme(true);
-    this._post({ type: 'sh3d-config', accessToken: this._lastToken });
+    this._post({ type: 'sh3d-config', accessToken: this._lastToken, home: this._home });
+  }
+
+  // Page (re)load: look up the active home (it may have changed on another
+  // device), then hand out the config the page waits for.
+  async _sendFreshConfig() {
+    try {
+      const result = await this._hass.callWS({ type: 'home_3d_dashboard/get_active_home' });
+      this._home = (result && result.home) || 'default';
+    } catch (err) {
+      console.error('[3d-dashboard] get_active_home failed', err);
+      this._home = this._home || 'default';
+    }
+    this._sendConfig();
   }
 
   // Sends the HA theme (colors, font, dark mode) so the editor matches it.
@@ -294,7 +310,7 @@ class Home3DDashboardPanel extends HTMLElement {
     switch (ev.data.type) {
       case 'sh3d-hello':
         if (this._hass) {
-          this._sendConfig();
+          this._sendFreshConfig();
         } else {
           this._helloPending = true;
         }
@@ -317,13 +333,29 @@ class Home3DDashboardPanel extends HTMLElement {
         break;
       case 'sh3d-save-mappings':
         if (this._hass && ev.data.mappings && typeof ev.data.mappings === 'object') {
-          this._mappings = ev.data.mappings;
+          const home = typeof ev.data.home === 'string' && ev.data.home ? ev.data.home : this._home;
+          if (home === this._home) {
+            this._mappings = ev.data.mappings;
+            this._lastStatesJson = null;
+            this._pushStates();
+          }
           this._hass.callWS({
             type: 'home_3d_dashboard/save_mappings',
-            mappings: this._mappings,
-          });
-          this._lastStatesJson = null;
-          this._pushStates();
+            mappings: ev.data.mappings,
+            home: home || 'default',
+          }).catch((err) => console.error('[3d-dashboard] save_mappings failed', err));
+        }
+        break;
+      case 'sh3d-active-home':
+        if (this._hass && typeof ev.data.home === 'string' && ev.data.home
+            && ev.data.home !== this._home) {
+          this._home = ev.data.home;
+          this._hass.callWS({ type: 'home_3d_dashboard/set_active_home', home: this._home })
+            .catch((err) => console.error('[3d-dashboard] set_active_home failed', err));
+          // The editor now shows another home: send that home's bindings
+          if (this._viewerReady) {
+            this._sendInit();
+          }
         }
         break;
     }
@@ -331,10 +363,16 @@ class Home3DDashboardPanel extends HTMLElement {
 
   async _sendInit() {
     this._initSent = true;
+    // A newer init (another home opened meanwhile) supersedes this one
+    const seq = this._initSeq = (this._initSeq || 0) + 1;
     try {
       const raw = await this._hass.callWS({
         type: 'home_3d_dashboard/get_mappings',
+        home: this._home || 'default',
       });
+      if (seq !== this._initSeq) {
+        return;
+      }
       // Drop v1.x legacy entries (mesh-name keys with object values); only
       // pieceId -> entityId string mappings are meaningful since v2
       this._mappings = {};

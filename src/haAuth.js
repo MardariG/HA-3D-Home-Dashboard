@@ -6,8 +6,10 @@
  * custom panel element (public/panel.js) owns the frontend's access token
  * and hands it to this iframe during an initial handshake:
  *
- *   page  -> panel : sh3d-hello               (repeated until answered)
- *   panel -> page  : sh3d-config {accessToken} (re-sent on token refresh)
+ *   page  -> panel : sh3d-hello                     (repeated until answered)
+ *   panel -> page  : sh3d-config {accessToken, home} (re-sent on token refresh)
+ *
+ * `home` is the active home: the one the viewer and editor open.
  *
  * installAuthXhr() then attaches "Authorization: Bearer <token>" to every
  * XHR aimed at the integration's API. The save worker gets the same
@@ -16,6 +18,7 @@
  */
 
 var accessToken = null;
+var activeHome = null;
 
 export function setAccessToken(token) {
   accessToken = token || null;
@@ -23,6 +26,11 @@ export function setAccessToken(token) {
 
 export function getAccessToken() {
   return accessToken;
+}
+
+/** Name of the home to open (from the panel), "default" before/without it. */
+export function getActiveHome() {
+  return activeHome || 'default';
 }
 
 export function installAuthXhr() {
@@ -60,6 +68,7 @@ export function requestPanelConfig(onConfig, onTimeout) {
     setAccessToken(ev.data.accessToken);
     if (!configReceived) {
       configReceived = true;
+      activeHome = typeof ev.data.home === 'string' && ev.data.home ? ev.data.home : null;
       onConfig(ev.data);
     }
   });

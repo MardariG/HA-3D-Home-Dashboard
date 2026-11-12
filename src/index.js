@@ -9,7 +9,7 @@
 
 import { addModeToggle } from './haMode.js';
 import { installZipRequestDeduplication } from './zipDedupe.js';
-import { installAuthXhr, requestPanelConfig } from './haAuth.js';
+import { installAuthXhr, requestPanelConfig, getActiveHome } from './haAuth.js';
 import { initDashboard } from './dashboard3d.js';
 import { installBindings3D } from './bindings3d.js';
 
@@ -23,8 +23,9 @@ function status(text) {
 function start() {
   installZipRequestDeduplication();
   initDashboard({
+    // The active home, chosen in the editor (see src/homes.js)
     homeUrl: __HA_BUILD__
-      ? '/api/home_3d_dashboard/homes/default'
+      ? '/api/home_3d_dashboard/homes/' + encodeURIComponent(getActiveHome())
       : 'assets/default.sh3d',
     container: document.getElementById('container'),
     onStatus: status,

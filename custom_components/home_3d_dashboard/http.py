@@ -10,6 +10,7 @@ Protocol (dictated by public/src/DirectHomeRecorder.js in the frontend):
 from __future__ import annotations
 
 import re
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from aiohttp import web
@@ -20,7 +21,7 @@ from homeassistant.components.http import KEY_HASS, HomeAssistantView
 _VALID_NAME = re.compile(r"^[\w][\w .()\-]{0,100}$")
 
 
-def _safe_path(homes_dir: Path, name: str) -> Path | None:
+def safe_home_path(homes_dir: Path, name: str) -> Path | None:
     """Map a client-supplied home name to a file path, rejecting traversal."""
     if not _VALID_NAME.match(name) or ".." in name:
         return None
@@ -57,11 +58,16 @@ class HomeView(HomeAssistantView):
     name = "api:home_3d_dashboard:home"
     requires_auth = True
 
-    def __init__(self, homes_dir: Path) -> None:
+    def __init__(
+        self,
+        homes_dir: Path,
+        on_deleted: Callable[[str], Awaitable[None]] | None = None,
+    ) -> None:
         self._homes_dir = homes_dir
+        self._on_deleted = on_deleted
 
     async def get(self, request: web.Request, name: str) -> web.StreamResponse:
-        path = _safe_path(self._homes_dir, name)
+        path = safe_home_path(self._homes_dir, name)
         if path is None:
             return web.Response(status=400, text="Invalid home name")
 
@@ -70,6 +76,8 @@ class HomeView(HomeAssistantView):
             deleted = await hass.async_add_executor_job(self._delete, path)
             if not deleted:
                 return web.Response(status=404, text="Home not found")
+            if self._on_deleted is not None:
+                await self._on_deleted(name)
             return web.Response(status=200, text="1")
 
         exists = await hass.async_add_executor_job(path.is_file)
@@ -78,7 +86,7 @@ class HomeView(HomeAssistantView):
         return web.FileResponse(path)
 
     async def post(self, request: web.Request, name: str) -> web.Response:
-        path = _safe_path(self._homes_dir, name)
+        path = safe_home_path(self._homes_dir, name)
         if path is None:
             return web.Response(status=400, text="Invalid home name")
 

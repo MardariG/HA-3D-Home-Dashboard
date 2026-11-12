@@ -4,8 +4,9 @@ Serves the webpack-built Sweet Home 3D web editor as a sidebar panel and
 exposes:
   - an HTTP API to list / read / write / delete `.sh3d` home files stored
     under `<config>/home_3d_dashboard/` (see http.py),
-  - websocket commands to persist mesh -> entity mappings and viewer
-    settings (carried over from v1.x; storage format is compatible).
+  - websocket commands to persist piece -> entity mappings (per home) and
+    settings, including the active home the dashboard shows (carried over
+    from v1.x; the "default" home keeps the v1-compatible storage).
 """
 from __future__ import annotations
 
@@ -34,7 +35,7 @@ from .furniture import (
     prepare_pack_dir,
 )
 from .furniture_pack_info import FURNITURE_LIBRARIES
-from .http import HomesListView, HomeView
+from .http import HomesListView, HomeView, safe_home_path
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -48,15 +49,23 @@ WS_GET = DOMAIN + "/get_mappings"
 WS_SAVE = DOMAIN + "/save_mappings"
 WS_GET_SETTINGS = DOMAIN + "/get_settings"
 WS_SAVE_SETTINGS = DOMAIN + "/save_settings"
+WS_GET_ACTIVE_HOME = DOMAIN + "/get_active_home"
+WS_SET_ACTIVE_HOME = DOMAIN + "/set_active_home"
 WS_FURNITURE_SUBSCRIBE = DOMAIN + "/furniture/subscribe"
 WS_FURNITURE_RETRY = DOMAIN + "/furniture/retry"
 
 CONFIG_SCHEMA = vol.Schema({DOMAIN: vol.Schema({})}, extra=vol.ALLOW_EXTRA)
 
+# The home created on first start; its bindings live in the top-level
+# "mappings" (v1-compatible), other homes' in "home_mappings"[name].
+DEFAULT_HOME = "default"
+ACTIVE_HOME_SETTING = "active_home"
+
 
 async def _setup_integration(hass: HomeAssistant) -> None:
     hass.data.setdefault(
-        DOMAIN, {"mappings": {}, "settings": {}, "_setup_done": False}
+        DOMAIN,
+        {"mappings": {}, "home_mappings": {}, "settings": {}, "_setup_done": False},
     )
     if hass.data[DOMAIN]["_setup_done"]:
         return
@@ -98,12 +107,21 @@ async def _setup_integration(hass: HomeAssistant) -> None:
     furniture.async_start()
 
     hass.http.register_view(HomesListView(homes_dir))
-    hass.http.register_view(HomeView(homes_dir))
+    hass.data[DOMAIN]["homes_dir"] = homes_dir
+
+    async def on_home_deleted(name: str) -> None:
+        # A deleted home's bindings can never apply again
+        if _set_home_mappings(hass, name, {}):
+            await hass.async_add_executor_job(_save_data, hass)
+
+    hass.http.register_view(HomeView(homes_dir, on_home_deleted))
 
     websocket_api.async_register_command(hass, ws_get_mappings)
     websocket_api.async_register_command(hass, ws_save_mappings)
     websocket_api.async_register_command(hass, ws_get_settings)
     websocket_api.async_register_command(hass, ws_save_settings)
+    websocket_api.async_register_command(hass, ws_get_active_home)
+    websocket_api.async_register_command(hass, ws_set_active_home)
     websocket_api.async_register_command(hass, ws_subscribe_furniture)
     websocket_api.async_register_command(hass, ws_retry_furniture)
 
@@ -168,6 +186,7 @@ def _load_data(hass: HomeAssistant) -> None:
         _LOGGER.exception("Failed to load %s", path)
         return
     hass.data[DOMAIN]["mappings"] = data.get("mappings", {})
+    hass.data[DOMAIN]["home_mappings"] = data.get("home_mappings", {})
     hass.data[DOMAIN]["settings"] = data.get("settings", {})
 
 
@@ -176,25 +195,91 @@ def _save_data(hass: HomeAssistant) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "mappings": hass.data[DOMAIN]["mappings"],
+        "home_mappings": hass.data[DOMAIN]["home_mappings"],
         "settings": hass.data[DOMAIN]["settings"],
     }
     path.write_text(json.dumps(payload, indent=2))
 
 
-@websocket_api.websocket_command({vol.Required("type"): WS_GET})
-@websocket_api.async_response
-async def ws_get_mappings(hass, connection, msg):
-    connection.send_result(msg["id"], hass.data[DOMAIN]["mappings"])
+def _home_mappings(hass: HomeAssistant, home: str) -> dict:
+    if home == DEFAULT_HOME:
+        return hass.data[DOMAIN]["mappings"]
+    return hass.data[DOMAIN]["home_mappings"].get(home, {})
+
+
+def _set_home_mappings(hass: HomeAssistant, home: str, mappings: dict) -> bool:
+    """Store a home's mappings (none: forget them); returns True if changed."""
+    if home == DEFAULT_HOME:
+        changed = hass.data[DOMAIN]["mappings"] != mappings
+        hass.data[DOMAIN]["mappings"] = mappings
+        return changed
+    home_mappings = hass.data[DOMAIN]["home_mappings"]
+    if not mappings:
+        return home_mappings.pop(home, None) is not None
+    changed = home_mappings.get(home) != mappings
+    home_mappings[home] = mappings
+    return changed
+
+
+def _active_home(hass: HomeAssistant) -> str:
+    """The home the dashboard shows: the chosen one if it still exists,
+    else "default", else the first saved home."""
+    homes_dir = hass.data[DOMAIN]["homes_dir"]
+    chosen = hass.data[DOMAIN]["settings"].get(ACTIVE_HOME_SETTING)
+    for name in (chosen, DEFAULT_HOME):
+        if isinstance(name, str):
+            path = safe_home_path(homes_dir, name)
+            if path is not None and path.is_file():
+                return name
+    names = sorted(p.stem for p in homes_dir.glob("*.sh3d"))
+    return names[0] if names else DEFAULT_HOME
 
 
 @websocket_api.websocket_command(
-    {vol.Required("type"): WS_SAVE, vol.Required("mappings"): dict}
+    {vol.Required("type"): WS_GET, vol.Optional("home", default=DEFAULT_HOME): str}
+)
+@websocket_api.async_response
+async def ws_get_mappings(hass, connection, msg):
+    connection.send_result(msg["id"], _home_mappings(hass, msg["home"]))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_SAVE,
+        vol.Required("mappings"): dict,
+        vol.Optional("home", default=DEFAULT_HOME): str,
+    }
 )
 @websocket_api.async_response
 async def ws_save_mappings(hass, connection, msg):
-    hass.data[DOMAIN]["mappings"] = msg["mappings"]
+    if safe_home_path(hass.data[DOMAIN]["homes_dir"], msg["home"]) is None:
+        connection.send_error(msg["id"], "invalid_home", "Invalid home name")
+        return
+    _set_home_mappings(hass, msg["home"], msg["mappings"])
     await hass.async_add_executor_job(_save_data, hass)
     connection.send_result(msg["id"], {"success": True})
+
+
+@websocket_api.websocket_command({vol.Required("type"): WS_GET_ACTIVE_HOME})
+@websocket_api.async_response
+async def ws_get_active_home(hass, connection, msg):
+    home = await hass.async_add_executor_job(_active_home, hass)
+    connection.send_result(msg["id"], {"home": home})
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): WS_SET_ACTIVE_HOME, vol.Required("home"): str}
+)
+@websocket_api.async_response
+async def ws_set_active_home(hass, connection, msg):
+    if safe_home_path(hass.data[DOMAIN]["homes_dir"], msg["home"]) is None:
+        connection.send_error(msg["id"], "invalid_home", "Invalid home name")
+        return
+    settings = hass.data[DOMAIN]["settings"]
+    if settings.get(ACTIVE_HOME_SETTING) != msg["home"]:
+        settings[ACTIVE_HOME_SETTING] = msg["home"]
+        await hass.async_add_executor_job(_save_data, hass)
+    connection.send_result(msg["id"], {"home": msg["home"]})
 
 
 @websocket_api.websocket_command({vol.Required("type"): WS_GET_SETTINGS})
@@ -208,7 +293,12 @@ async def ws_get_settings(hass, connection, msg):
 )
 @websocket_api.async_response
 async def ws_save_settings(hass, connection, msg):
-    hass.data[DOMAIN]["settings"] = msg["settings"]
+    settings = dict(msg["settings"])
+    # The active home is set through set_active_home: keep it
+    active = hass.data[DOMAIN]["settings"].get(ACTIVE_HOME_SETTING)
+    if active is not None:
+        settings.setdefault(ACTIVE_HOME_SETTING, active)
+    hass.data[DOMAIN]["settings"] = settings
     await hass.async_add_executor_job(_save_data, hass)
     connection.send_result(msg["id"], {"success": True})
 

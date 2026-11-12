@@ -753,3 +753,120 @@ body.h3d-simple #h3d-more-menu {
 .spinner button:active {
   background: var(--h3d-primary-tint);
 }
+
+/* ------------------------------- homes ---------------------------------- */
+
+/* Open dialog: the list of homes (src/homes.js) */
+.open-dialog .home-list {
+  height: auto;
+  min-height: 5em;
+  max-height: 50vh;
+  padding: 4px;
+  border: 1px solid var(--h3d-divider);
+  border-radius: 8px;
+  background-color: var(--h3d-card);
+}
+
+.open-dialog .home-list .item {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font: 14px var(--h3d-font);
+}
+
+.open-dialog .home-list .item:hover {
+  background-color: var(--h3d-hover);
+}
+
+.open-dialog .home-list .item.selected {
+  background-color: var(--h3d-primary-tint);
+  color: var(--h3d-primary);
+}
+
+/* New home name dialog */
+#h3d-home-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 10004;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  font: 14px/1.5 var(--h3d-font);
+}
+
+#h3d-home-dialog .h3d-home-box {
+  width: min(400px, calc(100vw - 32px));
+  padding: 20px 24px;
+  border-radius: 16px;
+  background: var(--h3d-card);
+  box-shadow: var(--h3d-shadow);
+  box-sizing: border-box;
+}
+
+#h3d-home-dialog h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+#h3d-home-dialog .h3d-home-hint {
+  margin: 0 0 14px;
+  color: var(--h3d-text2);
+  font-size: 13px;
+}
+
+#h3d-home-dialog label {
+  display: block;
+  color: var(--h3d-text2);
+  font-size: 12px;
+}
+
+#h3d-home-dialog input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--h3d-border);
+  border-radius: 8px;
+  background: var(--h3d-card);
+  color: var(--h3d-text);
+  font: 15px var(--h3d-font);
+  box-sizing: border-box;
+}
+
+#h3d-home-dialog input:focus {
+  outline: 2px solid var(--h3d-primary);
+  outline-offset: -1px;
+}
+
+#h3d-home-dialog .h3d-home-error {
+  min-height: 1.5em;
+  margin: 6px 0 0;
+  color: var(--h3d-error);
+  font-size: 13px;
+}
+
+#h3d-home-dialog .h3d-home-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+#h3d-home-dialog button {
+  height: 36px;
+  padding: 0 18px;
+  border: 1px solid var(--h3d-border);
+  border-radius: 18px;
+  background: transparent;
+  color: var(--h3d-primary);
+  font: 500 14px/1 var(--h3d-font);
+  cursor: pointer;
+}
+
+#h3d-home-dialog button.primary {
+  border-color: var(--h3d-primary);
+  background: var(--h3d-primary);
+  color: var(--h3d-on-primary);
+}

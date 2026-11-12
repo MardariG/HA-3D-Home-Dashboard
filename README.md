@@ -70,8 +70,16 @@ sidebar. (Alternatively add `home_3d_dashboard:` to `configuration.yaml`.)
   plan explains the current drawing tool (turn it off with its ×, back on
   from the ⋮ menu). The plan itself stays light in dark mode so walls and
   dimensions stay readable.
-- **Native `.sh3d` files** — stored in `<config>/home_3d_dashboard/`;
-  interchange freely with the desktop [Sweet Home 3D](https://www.sweethome3d.com/) app
+- **Several homes** — *New…* in the simple editor (or *New* in the
+  Advanced editor's ⋮ menu) asks for a name and creates an empty home; the
+  previous one stays in your list. *Switch…* (*Open* in the Advanced
+  editor) lists your homes to open one or delete one (except the open
+  one). The dashboard shows the home you last opened, created or saved in
+  the editor, on every device. Each home keeps its own entity bindings.
+- **Native `.sh3d` files** — stored in `<config>/home_3d_dashboard/`, one
+  per home (`<name>.sh3d`); interchange freely with the desktop
+  [Sweet Home 3D](https://www.sweethome3d.com/) app. A `.sh3d` file copied
+  into that folder shows up in the list of homes.
 - **3D navigation** — orbit, pan, zoom, aerial view and virtual visit modes,
   mouse or touch
 - **Entity bindings** — place devices from the simple editor, select an
@@ -109,7 +117,7 @@ sidebar. (Alternatively add `home_3d_dashboard:` to `configuration.yaml`.)
   viewer are gone; the engine now reads `.sh3d` directly.
 - Previously uploaded models in `<config>/3d_models/` are not migrated —
   re-save them via the editor or copy the `.sh3d` files into
-  `<config>/home_3d_dashboard/`.
+  `<config>/home_3d_dashboard/`, then open them with *Switch…*.
 
 ## Development
 
@@ -143,8 +151,9 @@ custom_components/home_3d_dashboard/
 src/                 # webpack entries (editor.js wires DirectHomeRecorder
                      #   to the HA API via the __HA_BUILD__ define;
                      #   simpleMode.js is the simple editing panel,
-                     #   advancedUi.js the Advanced editor's toolbar, and
-                     #   editorTheme.js/.css the HA theme and styling)
+                     #   advancedUi.js the Advanced editor's toolbar,
+                     #   editorTheme.js/.css the HA theme and styling, and
+                     #   homes.js several homes and the active one)
 public/              # Sweet Home 3D engine: vendor libs, editor sources,
                      #   icons, furniture models (legacy global scripts,
                      #   loaded via <script> tags — see webpack.config.js)
@@ -153,7 +162,12 @@ public/              # Sweet Home 3D engine: vendor libs, editor sources,
 The home file API implements the protocol expected by the engine's
 `DirectHomeRecorder` (`public/src/DirectHomeRecorder.js`): GET/POST raw
 `.sh3d` bytes at `/api/home_3d_dashboard/homes/{name}`, JSON list at
-`/homes`, delete via GET `?action=delete`.
+`/homes`, delete via GET `?action=delete` (which also drops the home's
+bindings). The active home — the one the dashboard and editor open — is
+kept in the integration's settings (`home_3d_dashboard/get_active_home`,
+`/set_active_home` websocket commands); the panel passes it to the pages
+in its `sh3d-config` message. Bindings are stored per home: `default` keeps
+the v1-compatible top-level `mappings`, other homes use `home_mappings`.
 
 The API requires authentication: the custom panel element (`panel.js`)
 passes the frontend's access token to the iframe over a same-origin

@@ -109,6 +109,9 @@ var STYLE = [
   '#h3d-simple .h3d-title b { font-size: 15px; }',
   '#h3d-simple .h3d-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }',
   '#h3d-simple .h3d-head .h3d-row { margin-top: 8px; }',
+  '#h3d-simple .h3d-head .h3d-home-row { margin-top: 4px; gap: 10px; }',
+  '#h3d-simple span.h3d-home-name { flex: 1; min-width: 0; font-weight: 500; overflow: hidden;',
+  '  text-overflow: ellipsis; white-space: nowrap; }',
   '#h3d-simple span.h3d-status { margin-left: auto; font-size: 12px; color: var(--h3d-text2); }',
   '#h3d-simple span.h3d-status.dirty { color: var(--h3d-warning); }',
   '#h3d-simple .h3d-body { flex: 1; overflow-y: auto; padding: 4px 0 12px; }',
@@ -1367,10 +1370,17 @@ export function installSimpleMode(application, bridge) {
 
   var panel = el('div', { id: 'h3d-simple' });
   var statusLabel = el('span', { className: 'h3d-status' });
+  var homeLabel = el('span', { className: 'h3d-home-name' });
   var head = el('div', { className: 'h3d-head' }, [
     el('div', { className: 'h3d-title' }, [
       el('b', { text: 'Edit your home' }),
       el('button', { className: 'link', text: 'Advanced editor', title: 'Switch to the full Sweet Home 3D editor', onclick: function () { setSimple(false); } })
+    ]),
+    // Which home this is; the dashboard shows the one open here
+    el('div', { className: 'h3d-row h3d-home-row' }, [
+      homeLabel,
+      el('button', { className: 'link', text: 'Switch…', title: 'Open another of your homes (you can delete homes there too)', onclick: function () { cancelTool(); controller.open(); } }),
+      el('button', { className: 'link', text: 'New…', title: 'Start a new home with its own name; this one stays in the list', onclick: function () { cancelTool(); controller.newHome(); } })
     ]),
     el('div', { className: 'h3d-row' }, [
       el('button', { text: '↶ Undo', title: 'Undo (Ctrl+Z)', onclick: function () { undoRedo('undo'); } }),
@@ -1833,6 +1843,11 @@ export function installSimpleMode(application, bridge) {
     var modified = home.isModified();
     statusLabel.textContent = modified ? '● Unsaved changes' : 'Saved';
     statusLabel.classList.toggle('dirty', modified);
+    var name = home.getName() || 'Untitled';
+    if (homeLabel.textContent !== '🏠 ' + name) {
+      homeLabel.textContent = '🏠 ' + name;
+      homeLabel.title = 'Home: ' + name;
+    }
   }
 
   /* ------------------------- saving and leaving ------------------------- */
@@ -1981,18 +1996,47 @@ export function installSimpleMode(application, bridge) {
 
   /* -------------------------------- wiring ------------------------------ */
 
-  home.getRooms().forEach(rememberRoomPoints);
-
-  home.addSelectionListener({
+  var selectionListener = {
     selectionChanged: function () {
       extendSelection();
       refresh(false);
     }
-  });
-  home.addPropertyChangeListener('SELECTED_LEVEL', function () {
+  };
+
+  function levelListener() {
     refresh(false);
     if (state.tool) {
       drawPreview();
+    }
+  }
+
+  // Points everything at `newHome`: New and Open in the Advanced editor
+  // close the current home and open another one with its own controllers,
+  // and the panel (Save included) must work on that one, not the closed one.
+  function attachHome(newHome) {
+    home = newHome;
+    controller = application.getHomeController(home);
+    planController = controller.getPlanController();
+    furnitureController = controller.getFurnitureController();
+    undoSupport = controller.getUndoableEditSupport();
+    plan = planController.getView();
+    state.roomPoints = {};
+    state.lastSignature = null;
+    home.getRooms().forEach(rememberRoomPoints);
+    home.addSelectionListener(selectionListener);
+    home.addPropertyChangeListener('SELECTED_LEVEL', levelListener);
+  }
+
+  home.getRooms().forEach(rememberRoomPoints);
+  home.addSelectionListener(selectionListener);
+  home.addPropertyChangeListener('SELECTED_LEVEL', levelListener);
+
+  application.addHomesListener(function (ev) {
+    if (ev.getType() === window.CollectionEvent.Type.ADD && ev.getItem() !== home) {
+      cancelTool();
+      attachHome(ev.getItem());
+      // Re-applies the mode to the new home's views (camera, base plan lock)
+      setSimple(isSimple());
     }
   });
   bridge.onInit(function () {

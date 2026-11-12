@@ -44,7 +44,8 @@ import { installEditorBindings } from './editorBindings.js';
 import { installSimpleMode } from './simpleMode.js';
 import { installAdvancedUi } from './advancedUi.js';
 import { installEditorTheme } from './editorTheme.js';
-import { installAuthXhr, requestPanelConfig, getAccessToken } from './haAuth.js';
+import { installHomes } from './homes.js';
+import { installAuthXhr, requestPanelConfig, getActiveHome } from './haAuth.js';
 
 function initEditor() {
   installZipRequestDeduplication();
@@ -97,45 +98,21 @@ function initEditor() {
     // Deliberately NOT setting configuration.defaultHomeName:
     // DirectRecordingHomeController.save() treats a home whose name equals
     // defaultHomeName as never-saved and forces the "save as" name prompt
-    // (SweetHome3DJSApplication.js, save()). We name homes ourselves below.
+    // (SweetHome3DJSApplication.js, save()). Homes are named in src/homes.js.
   }
 
   var application = new window.SweetHome3DJSApplication(configuration);
 
-  if (__HA_BUILD__) {
-    // Single-home dashboard flow: the dashboard always shows the home named
-    // "default", so every save must overwrite it — never prompt for a name.
-    //
-    // 1. HomeController.save() falls into the "save as" path (name prompt
-    //    dialog) whenever home.getName() is null, which happens for homes
-    //    created via the New Home action. Naming every added home up front
-    //    keeps the controller on the direct-save path.
-    application.addHomesListener(function (ev) {
-      var CollectionEvent = window.CollectionEvent;
-      if (CollectionEvent
-          && ev.getType() === CollectionEvent.Type.ADD
-          && !ev.getItem().getName()) {
-        ev.getItem().setName('default');
-      }
-    });
-    // 2. Whatever name a dialog might still produce, force writes to
-    //    "default" so the viewer page always picks up the latest save.
-    var recorder = application.getHomeRecorder();
-    var originalWriteHome = recorder.writeHome;
-    recorder.writeHome = function (home, homeName, observer) {
-      home.setName('default');
-      // The save worker reads the home zip over the authenticated API; it
-      // picks the token up from the configuration it is instantiated with
-      // (see the recorder-worker shim in webpack.config.js). Refresh it at
-      // each save in case the frontend rotated its token meanwhile.
-      this.configuration.__haAccessToken = getAccessToken();
-      return originalWriteHome.call(this, home, 'default', observer);
-    };
-  }
-
   // Entity binding authoring (right-click a piece, then "Bind to entity…").
   // Outside the HA panel the bridge stays empty.
   var bridge = installEditorBindings(application);
+
+  if (__HA_BUILD__) {
+    // Several homes, one active (shown by the dashboard): New asks for a
+    // name, saves go to the home's own name, and opening, creating or
+    // renaming a home makes it the active one (src/homes.js).
+    installHomes(application, bridge);
+  }
 
   // Advanced editor toolbar (src/advancedUi.js) and simple editing mode
   // (src/simpleMode.js), once the home and its views exist
@@ -167,13 +144,13 @@ function initEditor() {
   // In the HA build homes are addressed by NAME (formatted into readHomeURL
   // by DirectHomeRecorder); in the plain web build by direct URL.
   var homeURL = __HA_BUILD__
-    ? 'default'
+    ? getActiveHome()
     : window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1) +
       'assets/default.sh3d';
 
   application.getHomeRecorder().readHome(homeURL, {
     homeLoaded: function (home) {
-      home.setName(__HA_BUILD__ ? 'default' : homeURL);
+      home.setName(__HA_BUILD__ ? getActiveHome() : homeURL);
       application.addHome(home);
     },
     homeError: function (err) {
@@ -186,7 +163,7 @@ function initEditor() {
       );
       try {
         var home = new window.Home();
-        home.setName(__HA_BUILD__ ? 'default' : 'Untitled');
+        home.setName(__HA_BUILD__ ? getActiveHome() : 'Untitled');
         application.addHome(home);
       } catch (e) {
         // eslint-disable-next-line no-console

@@ -47,19 +47,39 @@ export function installEditorBindings(application) {
         delete mappings[targetId];
       }
       pruneOrphanMappings();
-      post({ type: 'sh3d-save-mappings', mappings: mappings });
+      post({ type: 'sh3d-save-mappings', mappings: mappings, home: currentHomeName() });
+    },
+    // Stores the current bindings under another home name (Save as)
+    copyMappingsTo: function (homeName) {
+      if (bridgeReady && homeName) {
+        post({ type: 'sh3d-save-mappings', mappings: mappings, home: homeName });
+      }
+    },
+    // Tells the panel which home the editor shows: the dashboard shows it
+    // too, and the panel answers with that home's bindings (sh3d-init).
+    setActiveHome: function (homeName) {
+      if (homeName) {
+        post({ type: 'sh3d-active-home', home: homeName });
+      }
     },
     showPicker: function (item) {
       showPicker(item);
     }
   };
 
-  if (window.parent === window) {
-    return bridge;
+  function post(msg) {
+    if (window.parent !== window) {
+      window.parent.postMessage(msg, window.location.origin);
+    }
   }
 
-  function post(msg) {
-    window.parent.postMessage(msg, window.location.origin);
+  function currentHomeName() {
+    var homes = application.getHomes();
+    return homes.length > 0 ? homes[0].getName() : null;
+  }
+
+  if (window.parent === window) {
+    return bridge;
   }
 
   window.addEventListener('message', function (ev) {
