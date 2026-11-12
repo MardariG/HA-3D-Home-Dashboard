@@ -64,7 +64,8 @@ sidebar. (Alternatively add `home_3d_dashboard:` to `configuration.yaml`.)
 - **Home Assistant look** — both editors follow your HA theme, including
   dark mode and custom primary colors. The Advanced editor's toolbar uses
   Home Assistant's Material Design Icons, with text labels on the drawing
-  tools when there's room, and a ⋮ menu for rarely used actions. Context
+  tools and *Add to home* when there's room, and a ⋮ menu for rarely used
+  actions. Context
   menus and dialogs are restyled to match, and a tip at the bottom of the
   plan explains the current drawing tool (turn it off with its ×, back on
   from the ⋮ menu). The plan itself stays light in dark mode so walls and

@@ -198,13 +198,15 @@ var ALIASES = {
   DELETE_SELECTION: 'DELETE'
 };
 
-// Short text labels shown next to the drawing tools' icons
+// Short text labels shown next to the icons of the drawing tools, and of
+// buttons whose icon alone says little
 var LABELS = {
   SELECT: 'Select',
   CREATE_WALLS: 'Walls',
   CREATE_ROOMS: 'Rooms',
   CREATE_DIMENSION_LINES: 'Dimensions',
-  CREATE_LABELS: 'Text'
+  CREATE_LABELS: 'Text',
+  ADD_HOME_FURNITURE: 'Add to home'
 };
 
 // What to do in each plan mode (the web engine has no keyboard length entry)
