@@ -36,6 +36,15 @@
 
 :root.h3d-dark {
   color-scheme: dark;
+  /* HA's dark theme; the user's own colors replace them when HA is dark
+     too (src/editorTheme.js) */
+  --h3d-text: #e1e1e1;
+  --h3d-text2: #9b9b9b;
+  --h3d-disabled: #6f6f6f;
+  --h3d-bg: #111111;
+  --h3d-bg2: #282828;
+  --h3d-card: #1c1c1c;
+  --h3d-divider: rgba(225, 225, 225, 0.12);
   --h3d-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
 }
 
@@ -53,8 +62,8 @@ button:disabled {
   color: var(--h3d-disabled);
 }
 
-/* The plan stays light in dark themes: its text color, read once when the
- * plan is created, is the color walls, labels and dimensions are drawn in. */
+/* The plan draws walls, labels and dimensions in its text color over its
+ * background; src/editorTheme.js hands both to the plan at each change. */
 #home-plan,
 #home-plan * {
   color: #404040;
@@ -63,6 +72,20 @@ button:disabled {
 #home-plan {
   background-color: #ffffff;
   border-color: var(--h3d-divider) !important;
+}
+
+:root.h3d-dark #home-plan {
+  background-color: var(--h3d-card) !important;
+  color: var(--h3d-text) !important;
+}
+
+:root.h3d-dark #home-plan * {
+  color: var(--h3d-text);
+}
+
+/* Selection outlines (read by the plan from ::selection) */
+:root.h3d-dark #home-plan::selection {
+  background: var(--h3d-primary);
 }
 
 #home-3D-view {
@@ -77,6 +100,13 @@ button:disabled {
   border: 1px solid rgba(0, 0, 0, 0.24);
   border-radius: 6px;
   padding: 3px 6px;
+}
+
+:root.h3d-dark #level-selector,
+:root.h3d-dark #home-plan #level-selector {
+  color: var(--h3d-text);
+  background: var(--h3d-card);
+  border-color: var(--h3d-border);
 }
 
 /* ------------------------------- toolbar -------------------------------- */
@@ -297,6 +327,12 @@ button:disabled {
 #h3d-more-menu .toolbar-button.selected::after {
   content: "\2713";
   color: var(--h3d-primary);
+}
+
+#h3d-more-menu .h3d-menu-heading {
+  padding: 6px 10px 2px;
+  color: var(--h3d-text2);
+  font: 500 12px/1.4 var(--h3d-font);
 }
 
 #h3d-more-menu .h3d-sep {

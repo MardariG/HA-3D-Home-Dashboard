@@ -42,7 +42,7 @@ import { addModeToggle, showUpdateNotice } from './haMode.js';
 import { installZipRequestDeduplication } from './zipDedupe.js';
 import { installEditorBindings } from './editorBindings.js';
 import { installAdvancedUi } from './advancedUi.js';
-import { installEditorTheme } from './editorTheme.js';
+import { installEditorTheme, followThemeInPlans } from './editorTheme.js';
 import { installHomes, createHomePicker } from './homes.js';
 import { installAuthXhr, requestPanelConfig, getActiveHome, getPanelConfig } from './haAuth.js';
 
@@ -102,6 +102,8 @@ function initEditor() {
   }
 
   var application = new window.SweetHome3DJSApplication(configuration);
+  // The plan's colors follow the light or dark theme (src/editorTheme.js)
+  followThemeInPlans(application);
 
   // Entity binding authoring (right-click a piece, then "Bind to entity…").
   // Outside the HA panel the bridge stays empty.

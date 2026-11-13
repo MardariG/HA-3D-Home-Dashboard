@@ -47,8 +47,9 @@ sidebar. (Alternatively add `home_3d_dashboard:` to `configuration.yaml`.)
   actions. Context
   menus and dialogs are restyled to match, and a tip at the bottom of the
   plan explains the current drawing tool (turn it off with its ×, back on
-  from the ⋮ menu). The plan itself stays light in dark mode so walls and
-  dimensions stay readable.
+  from the ⋮ menu). In dark mode the plan is dark too. *Appearance* in the
+  ⋮ menu makes the editor always light or always dark instead of matching
+  Home Assistant (remembered per browser).
 - **Several homes** — the editor's toolbar has a list of your homes: pick
   one to open it. At the end of the list, *New home…* asks for a name and
   creates an empty home (the previous one stays in your list), and

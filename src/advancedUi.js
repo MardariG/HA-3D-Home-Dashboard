@@ -34,10 +34,12 @@ import {
   mdiPlay, mdiPrinterOutline, mdiRecord, mdiRedo, mdiRestore, mdiRewind,
   mdiRotate3dVariant, mdiRuler, mdiSelectAll, mdiSelectGroup, mdiSkipBackward,
   mdiSkipForward, mdiSofaOutline, mdiSort, mdiSvg, mdiSwapHorizontal,
-  mdiTableColumn, mdiTexture, mdiTextureBox, mdiTranslate, mdiUndo, mdiUngroup,
-  mdiVectorLink, mdiVectorPolyline, mdiVideoOffOutline, mdiVideoOutline, mdiWalk,
-  mdiWall, mdiZipBoxOutline
+  mdiTableColumn, mdiTexture, mdiTextureBox, mdiThemeLightDark, mdiTranslate,
+  mdiUndo, mdiUngroup, mdiVectorLink, mdiVectorPolyline, mdiVideoOffOutline,
+  mdiVideoOutline, mdiWalk, mdiWall, mdiWeatherNight, mdiWeatherSunny,
+  mdiZipBoxOutline
 } from '@mdi/js';
+import { getAppearance, setAppearance, onAppearanceChange } from './editorTheme.js';
 
 var HINTS_KEY = 'home_3d_dashboard.drawingTips';
 
@@ -283,6 +285,18 @@ export function installAdvancedUi(application, options) {
   document.body.appendChild(menu);
   var moreButton = null;
   var tipsButton = null;
+  var appearanceButtons = [];
+  var APPEARANCES = [
+    { value: 'auto', label: 'Match Home Assistant', icon: mdiThemeLightDark,
+      title: 'Light or dark like Home Assistant' },
+    { value: 'light', label: 'Light', icon: mdiWeatherSunny, title: 'Always light' },
+    { value: 'dark', label: 'Dark', icon: mdiWeatherNight, title: 'Always dark' }
+  ];
+  onAppearanceChange(function (appearance) {
+    appearanceButtons.forEach(function (button, i) {
+      button.classList.toggle('selected', APPEARANCES[i].value === appearance);
+    });
+  });
 
   var hint = document.createElement('div');
   hint.id = 'h3d-hint';
@@ -444,6 +458,27 @@ export function installAdvancedUi(application, options) {
     });
     menu.appendChild(tipsButton);
 
+    // Light or dark editor (src/editorTheme.js)
+    menu.appendChild(separator());
+    var heading = document.createElement('div');
+    heading.className = 'h3d-menu-heading';
+    heading.textContent = 'Appearance';
+    menu.appendChild(heading);
+    appearanceButtons = APPEARANCES.map(function (choice) {
+      var button = document.createElement('button');
+      button.className = 'toolbar-button h3d-appearance';
+      button.innerHTML = '<span class="h3d-ico"></span><span class="h3d-label"></span>';
+      button.lastChild.textContent = choice.label;
+      button.title = choice.title;
+      setMask(button.firstChild, iconUrl(choice.icon));
+      button.classList.toggle('selected', getAppearance() === choice.value);
+      button.addEventListener('click', function () {
+        setAppearance(choice.value);
+      });
+      menu.appendChild(button);
+      return button;
+    });
+
     moreButton = document.createElement('button');
     moreButton.className = 'toolbar-button h3d-more-button';
     moreButton.title = 'More actions';
@@ -503,7 +538,8 @@ export function installAdvancedUi(application, options) {
 
   // Picking an item runs it (the engine's own click listener) and closes
   menu.addEventListener('click', function (ev) {
-    if (ev.target.closest && ev.target.closest('.toolbar-button') && !ev.target.closest('.h3d-tips-toggle')) {
+    if (ev.target.closest && ev.target.closest('.toolbar-button')
+        && !ev.target.closest('.h3d-tips-toggle, .h3d-appearance')) {
       closeMenu();
     }
   });
