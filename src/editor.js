@@ -41,10 +41,9 @@ import './editorTheme.css';
 import { addModeToggle, showUpdateNotice } from './haMode.js';
 import { installZipRequestDeduplication } from './zipDedupe.js';
 import { installEditorBindings } from './editorBindings.js';
-import { installSimpleMode } from './simpleMode.js';
 import { installAdvancedUi } from './advancedUi.js';
 import { installEditorTheme } from './editorTheme.js';
-import { installHomes } from './homes.js';
+import { installHomes, createHomePicker } from './homes.js';
 import { installAuthXhr, requestPanelConfig, getActiveHome, getPanelConfig } from './haAuth.js';
 
 function initEditor() {
@@ -115,29 +114,26 @@ function initEditor() {
     installHomes(application, bridge);
   }
 
-  // Advanced editor toolbar (src/advancedUi.js) and simple editing mode
-  // (src/simpleMode.js), once the home and its views exist
-  var simpleModeWaiter = setInterval(function () {
+  // Toolbar (src/advancedUi.js), with the list of homes in the HA build,
+  // once the home and its views exist
+  var toolbarWaiter = setInterval(function () {
     if (application.getHomes().length > 0) {
-      clearInterval(simpleModeWaiter);
-      var simpleMode = null;
+      clearInterval(toolbarWaiter);
+      restoreCollapsedCatalog();
+      // A home saved by the simple editor keeps its collapsed splitter
+      application.addHomesListener(function () {
+        setTimeout(restoreCollapsedCatalog, 0);
+      });
       try {
         installAdvancedUi(application, {
-          onSimpleEditor: function () {
-            if (simpleMode) {
-              simpleMode.setSimple(true);
-            }
-          }
+          homePicker: __HA_BUILD__ ? createHomePicker(application) : null
         });
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error('[3d-dashboard] toolbar restyling unavailable', e);
       }
-      try {
-        simpleMode = installSimpleMode(application, bridge);
-      } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error('[3d-dashboard] simple mode unavailable', e);
+      if (__HA_BUILD__) {
+        guardLeaving(application);
       }
     }
   }, 100);
@@ -176,6 +172,59 @@ function initEditor() {
 
   // Handy handle for poking at the app from DevTools.
   window.__sh3dApp = application;
+}
+
+// The View button leaves the editor: offer to save unsaved changes first
+// (the engine's own Save / Do not save / Cancel question).
+function guardLeaving(application) {
+  var leaving = false;
+  function openHome() {
+    var home = application.getHomes()[0];
+    return home && home.isModified() ? home : null;
+  }
+  var view = document.querySelector('a[href^="index.html"]');
+  if (view) {
+    view.addEventListener('click', function (ev) {
+      var home = openHome();
+      if (!home) {
+        return;
+      }
+      ev.preventDefault();
+      var controller = application.getHomeController(home);
+      var go = function () {
+        leaving = true;
+        window.location.href = view.href;
+      };
+      controller.getView().confirmSave(home.getName(), function (save) {
+        if (save) {
+          controller.save(go);
+        } else {
+          go();
+        }
+      });
+    });
+  }
+  window.addEventListener('beforeunload', function (ev) {
+    if (!leaving && openHome()) {
+      ev.preventDefault();
+      ev.returnValue = '';
+    }
+  });
+}
+
+// The simple editor of earlier versions hid the catalog and could leave its
+// splitter saved at 0 (catalog collapsed): back to the default layout then.
+function restoreCollapsedCatalog() {
+  var catalog = document.getElementById('furniture-catalog');
+  if (catalog && catalog.offsetHeight < 40) {
+    ['furniture-catalog', 'catalog-furniture-splitter', 'furniture-view'].forEach(function (id) {
+      var node = document.getElementById(id);
+      if (node) {
+        node.style.removeProperty('top');
+        node.style.removeProperty('height');
+      }
+    });
+  }
 }
 
 function boot() {

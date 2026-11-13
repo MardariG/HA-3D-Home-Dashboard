@@ -37,32 +37,11 @@ sidebar. (Alternatively add `home_3d_dashboard:` to `configuration.yaml`.)
 
 ## Features
 
-- **Simple editor** — the editor opens in a simple mode built for
-  Home Assistant:
-  - **Your floors and areas:** a home without levels gets one level per
-    HA floor, and each level lists the HA areas on that floor as rooms to
-    draw.
-  - **Rooms:** pick a room and drag a rectangle on the plan, or type its
-    size. Walls are added automatically, and rooms that touch share one
-    wall. Clicking inside walls or a room you already have links it
-    instead.
-  - **Doors and windows:** click a wall to add one. It opens towards the
-    side you clicked.
-  - **Devices:** drag an HA device onto the plan and it's bound as it's
-    placed. Lights become ceiling lamps, TVs, radiators and blinds get
-    their own models, and everything else gets a small colored marker.
-    Dropping a light on an existing lamp binds that lamp, and dropping a
-    temperature sensor on a room gives it a floor heatmap. A room drawn
-    for an area with exactly one temperature sensor is bound to it
-    automatically.
-  - **Furniture:** an optional small set of common pieces.
-  - **Floor plan image:** "Trace over a floor plan image" puts a picture
-    of your floor plan under the plan, at the right scale.
-
-  **Advanced editor** switches to the complete Sweet Home 3D editor
-  (full catalog, any wall shape, levels, textures) on the same home.
-- **Home Assistant look** — both editors follow your HA theme, including
-  dark mode and custom primary colors. The Advanced editor's toolbar uses
+- **Editor** — the complete Sweet Home 3D editor in the sidebar: walls of
+  any shape, rooms, doors and windows, levels, textures and the full
+  furniture catalog.
+- **Home Assistant look** — the editor follows your HA theme, including
+  dark mode and custom primary colors. Its toolbar uses
   Home Assistant's Material Design Icons, with text labels on the drawing
   tools and *Add to home* when there's room, and a ⋮ menu for rarely used
   actions. Context
@@ -70,12 +49,11 @@ sidebar. (Alternatively add `home_3d_dashboard:` to `configuration.yaml`.)
   plan explains the current drawing tool (turn it off with its ×, back on
   from the ⋮ menu). The plan itself stays light in dark mode so walls and
   dimensions stay readable.
-- **Several homes** — *New…* in the simple editor (or *New* in the
-  Advanced editor's ⋮ menu) asks for a name and creates an empty home; the
-  previous one stays in your list. The simple editor's header has a list
-  of your homes: pick one to open it (*Open* in the Advanced editor's ⋮
-  menu), and *Delete…* removes homes you no longer need (except the open
-  one). The dashboard shows the home last opened in the editor, on every
+- **Several homes** — the editor's toolbar has a list of your homes: pick
+  one to open it. At the end of the list, *New home…* asks for a name and
+  creates an empty home (the previous one stays in your list), and
+  *Delete homes…* removes homes you no longer need (except the open one).
+  The dashboard shows the home last opened in the editor, on every
   device. Each home keeps its own entity bindings.
   After updating, restart Home Assistant and reload the page: the
   dashboard shows a notice until both are done.
@@ -85,10 +63,8 @@ sidebar. (Alternatively add `home_3d_dashboard:` to `configuration.yaml`.)
   into that folder shows up in the list of homes.
 - **3D navigation** — orbit, pan, zoom, aerial view and virtual visit modes,
   mouse or touch
-- **Entity bindings** — place devices from the simple editor, select an
-  item there and choose *Bind…*, or right-click a furniture piece *or
-  room* in the advanced editor (furniture list, plan or 3D view) →
-  *Bind to entity…*. In view
+- **Entity bindings** — right-click a furniture piece *or room* in the
+  editor (furniture list, plan or 3D view) → *Bind to entity…*. In view
   mode, toggleable entities tint their object amber while on and toggle on
   click/tap; `sensor.*`/`climate.*` entities show a floating 3D label with
   the live value, and rooms bound to temperature sensors get a floor
@@ -154,11 +130,10 @@ custom_components/home_3d_dashboard/
 └── frontend/        # output of `npm run build:ha`
 src/                 # webpack entries (editor.js wires DirectHomeRecorder
                      #   to the HA API via the __HA_BUILD__ define;
-                     #   simpleMode.js is the simple editing panel,
-                     #   advancedUi.js the Advanced editor's toolbar,
+                     #   advancedUi.js the editor's toolbar,
                      #   editorTheme.js/.css the HA theme and styling, and
                      #   homes.js several homes, the active one and the
-                     #   simple editor's home list)
+                     #   toolbar's list of homes)
 public/              # Sweet Home 3D engine: vendor libs, editor sources,
                      #   icons, furniture models (legacy global scripts,
                      #   loaded via <script> tags — see webpack.config.js)

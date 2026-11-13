@@ -265,7 +265,8 @@ function formatShortcut(accelerator) {
 
 /**
  * @param {SweetHome3DJSApplication} application
- * @param {{onSimpleEditor?: function}} [options]
+ * @param {{homePicker?: HTMLElement}} [options] homePicker: the list of
+ *   homes (src/homes.js createHomePicker), shown before the ⋮ button
  */
 export function installAdvancedUi(application, options) {
   options = options || {};
@@ -398,6 +399,9 @@ export function installAdvancedUi(application, options) {
     toolbar.appendChild(spacer);
 
     var end = group('h3d-end');
+    if (options.homePicker) {
+      end.appendChild(options.homePicker);
+    }
     END.forEach(function (key) {
       if (buttons[key]) {
         used[key] = true;
@@ -454,18 +458,6 @@ export function installAdvancedUi(application, options) {
       }
     });
     end.appendChild(moreButton);
-
-    if (typeof options.onSimpleEditor === 'function') {
-      var simple = document.createElement('button');
-      simple.className = 'h3d-switch';
-      simple.textContent = 'Simple editor';
-      simple.title = 'Back to the simple editing panel';
-      simple.addEventListener('click', function () {
-        closeMenu();
-        options.onSimpleEditor();
-      });
-      end.appendChild(simple);
-    }
     toolbar.appendChild(end);
 
     observer.takeRecords();
@@ -553,8 +545,7 @@ export function installAdvancedUi(application, options) {
     var text = hintsOn && HINTS[currentMode()];
     var plan = document.getElementById('home-plan');
     var rect = plan && plan.getBoundingClientRect();
-    if (!text || !rect || rect.width < 200 || rect.height < 80
-        || document.body.classList.contains('h3d-simple')) {
+    if (!text || !rect || rect.width < 200 || rect.height < 80) {
       hint.classList.remove('on');
       return;
     }
@@ -577,8 +568,6 @@ export function installAdvancedUi(application, options) {
   if (plan && window.ResizeObserver) {
     new ResizeObserver(updateHint).observe(plan);
   }
-  // Simple mode toggles a body class
-  new MutationObserver(updateHint).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
   /* ---------------------------- observation ---------------------------- */
 

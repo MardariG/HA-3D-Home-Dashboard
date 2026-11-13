@@ -10,15 +10,13 @@
  * window.__sh3dAppendBindMenuItem hook that HomePane's popup builders call.
  * Mappings are keyed by the piece's persistent id, which survives saves.
  *
- * Returns a small bridge (entities, HA areas/floors, mappings) that the
- * simple editing mode (src/simpleMode.js) builds on. When not embedded in
- * the HA panel the bridge is empty and bindings are disabled.
+ * Returns a small bridge (entities, mappings, the active home) used by
+ * src/homes.js. When not embedded in the HA panel the bridge is empty and
+ * bindings are disabled.
  */
 
 export function installEditorBindings(application) {
   var entities = [];
-  var areas = [];
-  var floors = [];
   var mappings = {};
   var bridgeReady = false;
   var initListeners = [];
@@ -26,8 +24,6 @@ export function installEditorBindings(application) {
   var bridge = {
     isReady: function () { return bridgeReady; },
     getEntities: function () { return entities; },
-    getAreas: function () { return areas; },
-    getFloors: function () { return floors; },
     getMappings: function () { return mappings; },
     onInit: function (listener) {
       initListeners.push(listener);
@@ -91,8 +87,6 @@ export function installEditorBindings(application) {
     }
     if (ev.data.type === 'sh3d-init') {
       entities = ev.data.entities || [];
-      areas = ev.data.areas || [];
-      floors = ev.data.floors || [];
       mappings = ev.data.mappings || {};
       bridgeReady = true;
       initListeners.forEach(function (listener) { listener(); });

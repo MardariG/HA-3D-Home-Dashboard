@@ -215,22 +215,30 @@ button:disabled {
   }
 }
 
-#home-pane-toolbar .h3d-switch {
-  flex: none;
+/* List of homes (src/homes.js createHomePicker) */
+#home-pane-toolbar select.h3d-home-picker {
+  flex: 0 1 auto;
+  min-width: 90px;
+  max-width: 220px;
   height: 32px;
-  margin-left: 4px;
-  padding: 0 14px;
-  border: 1px solid var(--h3d-primary);
+  margin: 0 4px;
+  padding: 0 10px;
+  border: 1px solid var(--h3d-border);
   border-radius: 16px;
-  background: transparent;
-  color: var(--h3d-primary);
+  background: var(--h3d-card);
+  color: var(--h3d-text);
   font: 500 13px/1 var(--h3d-font);
-  white-space: nowrap;
+  text-overflow: ellipsis;
   cursor: pointer;
 }
 
-#home-pane-toolbar .h3d-switch:hover {
-  background: var(--h3d-primary-tint);
+#home-pane-toolbar select.h3d-home-picker:hover {
+  background: var(--h3d-hover);
+}
+
+#home-pane-toolbar select.h3d-home-picker option {
+  background: var(--h3d-card);
+  color: var(--h3d-text);
 }
 
 /* Touch layout: toolbar along the bottom edge */
@@ -337,11 +345,6 @@ button:disabled {
 
 #h3d-hint button:hover {
   background: rgba(255, 255, 255, 0.18);
-}
-
-body.h3d-simple #h3d-hint,
-body.h3d-simple #h3d-more-menu {
-  display: none !important;
 }
 
 /* ----------------------------- side panes ------------------------------- */
@@ -599,21 +602,9 @@ body.h3d-simple #h3d-more-menu {
 
 /* ------------------------------- dialogs -------------------------------- */
 
-/* Above the simple editor's panel (z-index 9000, src/simpleMode.js), which
-   otherwise covers the left of wide dialogs; the menus and lists dialogs
-   open keep their place above the dialogs (engine: 200 < 1000 < 1100). */
 .dialog-container {
-  z-index: 9500;
   background-color: rgba(0, 0, 0, 0.45);
   font-family: var(--h3d-font);
-}
-
-.popup-menu {
-  z-index: 9600;
-}
-
-.combo-box .selection-panel {
-  z-index: 9700;
 }
 
 .dialog-content {

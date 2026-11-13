@@ -14,7 +14,7 @@
  *   panel -> iframe : sh3d-config        {accessToken, home, homesSupported}
  *                                        (re-sent on token refresh)
  *                     sh3d-theme         {dark, font, vars} (HA theme, re-sent on change)
- *                     sh3d-init          {mappings, entities, areas, floors}
+ *                     sh3d-init          {mappings, entities}
  *                     sh3d-states        {states: {entityId: state}}
  *
  * The panel also subscribes to home_3d_dashboard/furniture/subscribe and
@@ -428,28 +428,11 @@ class Home3DDashboardPanel extends HTMLElement {
         };
       })
       .filter(Boolean);
-    // Floors and areas let the editor's simple mode offer "your rooms"
-    // (hass.floors/areas exist since HA 2024.4; older versions send none).
-    const areas = Object.values(this._hass.areas || {})
-      .map((area) => ({
-        area_id: area.area_id,
-        name: area.name,
-        floor_id: area.floor_id || null,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-    const floors = Object.values(this._hass.floors || {})
-      .map((floor) => ({
-        floor_id: floor.floor_id,
-        name: floor.name,
-        level: typeof floor.level === 'number' ? floor.level : null,
-      }))
-      .sort((a, b) => (a.level ?? 0) - (b.level ?? 0) || a.name.localeCompare(b.name));
     console.info('[3d-dashboard] init sent: '
       + Object.keys(this._mappings).length + ' mapping(s), '
-      + entities.length + ' bindable entities, '
-      + areas.length + ' area(s), ' + floors.length + ' floor(s)');
+      + entities.length + ' bindable entities');
     this._post({
-      type: 'sh3d-init', mappings: this._mappings, entities, areas, floors,
+      type: 'sh3d-init', mappings: this._mappings, entities,
     });
     this._lastStatesJson = null;
     this._pushStates();

@@ -10,7 +10,8 @@
  *   the previous home stays in the list (Open lists, opens and deletes).
  * - Saves go to the home's own name; Save as also copies the bindings.
  * - Opening, creating or renaming a home makes it the active one.
- * - listHomes/openHome back the simple editor's home picker.
+ * - The toolbar's home picker (createHomePicker) lists the homes to open
+ *   one, and offers New and Delete.
  */
 
 import { getAccessToken } from './haAuth.js';
@@ -60,7 +61,7 @@ function showNameDialog(existingNames, onCreate) {
   var title = el('h2', null, 'New home');
   var hint = el('p', 'h3d-home-hint',
     'Your current home stays in your list of homes: switch back to it or delete it '
-    + 'any time (the home list in the simple editor, Open in the Advanced editor).');
+    + 'any time from the list of homes in the toolbar.');
   var label = el('label', null, 'Name');
   var input = el('input');
   input.type = 'text';
@@ -175,7 +176,7 @@ export function installHomes(application, bridge) {
 
   /**
    * Lists the saved homes: onList(names), with [] when they can't be listed.
-   * Used by the simple editor's home picker (src/simpleMode.js).
+   * Used by the toolbar's home picker (createHomePicker below).
    */
   Controller.prototype.listHomes = function (onList) {
     var request = recorder.getAvailableHomes({
@@ -271,4 +272,119 @@ export function installHomes(application, bridge) {
       listed([]);
     }
   };
+}
+
+var NEW_HOME = '\u0000new';
+var DELETE_HOMES = '\u0000delete';
+
+/**
+ * The toolbar's home picker (HA build, after installHomes): a list of the
+ * saved homes, the open one selected; picking another opens it (asking to
+ * save unsaved changes first). Its last entries create a new home and
+ * open the list of homes to delete some. Returns the <select>, or null
+ * outside the HA build.
+ * @param {SweetHome3DJSApplication} application
+ */
+export function createHomePicker(application) {
+  var Controller = window.DirectRecordingHomeController;
+  if (typeof Controller !== 'function' || typeof Controller.prototype.openHome !== 'function') {
+    return null;
+  }
+  var names = [];
+  var select = el('select', 'h3d-home-picker');
+  select.title = 'Your homes: pick one to open it. The dashboard shows the home open here.';
+  select.setAttribute('aria-label', 'Home');
+
+  function controller() {
+    var home = application.getHomes()[0];
+    return home ? application.getHomeController(home) : null;
+  }
+
+  function currentName() {
+    var home = application.getHomes()[0];
+    return (home && home.getName()) || '';
+  }
+
+  function option(value, text, disabled) {
+    var node = el('option', null, text);
+    node.value = value;
+    node.disabled = !!disabled;
+    return node;
+  }
+
+  function fill() {
+    var current = currentName();
+    var listed = names.slice();
+    if (listed.indexOf(current) < 0) {
+      listed.unshift(current);
+    }
+    var key = listed.join('\n') + '\n\n' + current;
+    if (select.getAttribute('data-key') === key) {
+      select.value = current;
+      return;
+    }
+    select.setAttribute('data-key', key);
+    select.textContent = '';
+    listed.forEach(function (name) {
+      select.appendChild(option(name, '🏠 ' + (name || 'Untitled')));
+    });
+    select.appendChild(option('', '──────────', true));
+    select.appendChild(option(NEW_HOME, '＋ New home…'));
+    select.appendChild(option(DELETE_HOMES, 'Delete homes…'));
+    select.value = current;
+  }
+
+  function refresh() {
+    var homeController = controller();
+    if (homeController) {
+      homeController.listHomes(function (list) {
+        names = list;
+        fill();
+      });
+    }
+  }
+
+  select.addEventListener('focus', refresh);
+  select.addEventListener('change', function () {
+    var value = select.value;
+    // Stays on the open home until another one has opened (or if a
+    // question on the way is cancelled)
+    select.value = currentName();
+    var homeController = controller();
+    if (!homeController) {
+      return;
+    }
+    if (value === NEW_HOME) {
+      homeController.newHome();
+    } else if (value === DELETE_HOMES) {
+      homeController.open();
+    } else {
+      homeController.openHome(value);
+    }
+  });
+  // Keys stay in the list: the plan's shortcuts must not see them
+  select.addEventListener('keydown', function (ev) {
+    ev.stopPropagation();
+  });
+
+  application.addHomesListener(function (ev) {
+    if (ev.getType() === window.CollectionEvent.Type.ADD) {
+      refresh();
+    }
+  });
+  // Save as renames the open home
+  var recorder = application.getHomeRecorder();
+  var writeHome = recorder.writeHome;
+  recorder.writeHome = function (home, homeName, observer) {
+    var wrapped = Object.create(observer || {});
+    wrapped.homeSaved = function () {
+      setTimeout(refresh, 0);
+      if (observer && observer.homeSaved) {
+        return observer.homeSaved.apply(observer, arguments);
+      }
+    };
+    return writeHome.call(this, home, homeName, wrapped);
+  };
+  refresh();
+  return select;
 }
