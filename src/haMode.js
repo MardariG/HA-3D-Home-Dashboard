@@ -71,3 +71,102 @@ export function showUpdateNotice(config) {
   notice.appendChild(close);
   document.body.appendChild(notice);
 }
+
+/**
+ * A centered card for something the user must know or do instead of seeing
+ * their home (no home yet, sign-in refused, load failure). Replaces the
+ * previous card. Uses the editor's theme variables when present (dark
+ * defaults match the dashboard's background).
+ * @param {{icon?: string, title: string, text: string, details?: string,
+ *          actions?: Array<{label: string, primary?: boolean,
+ *                           href?: string, onClick?: function}>}} options
+ *   icon: an SVG path (24×24, e.g. from @mdi/js)
+ */
+export function showMessageCard(options) {
+  var previous = document.getElementById('h3d-message');
+  if (previous) {
+    previous.remove();
+  }
+  var overlay = document.createElement('div');
+  overlay.id = 'h3d-message';
+  overlay.style.cssText =
+    'position:fixed;inset:0;z-index:9990;display:flex;align-items:center;justify-content:center;' +
+    'padding:16px;box-sizing:border-box;pointer-events:none;';
+  var card = document.createElement('div');
+  card.setAttribute('role', 'alert');
+  card.style.cssText =
+    'pointer-events:auto;box-sizing:border-box;width:100%;max-width:440px;padding:28px 28px 22px;' +
+    'border-radius:16px;text-align:center;background:var(--h3d-card,#262640);' +
+    'color:var(--h3d-text,#f1f1f5);box-shadow:0 8px 32px rgba(0,0,0,.45);' +
+    'font:14px/1.5 var(--h3d-font,system-ui,-apple-system,"Segoe UI",sans-serif);';
+  if (options.icon) {
+    var icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    icon.setAttribute('viewBox', '0 0 24 24');
+    icon.setAttribute('width', '48');
+    icon.setAttribute('height', '48');
+    icon.setAttribute('aria-hidden', 'true');
+    icon.style.cssText = 'display:block;margin:0 auto 12px;fill:var(--h3d-primary,#03a9f4);';
+    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', options.icon);
+    icon.appendChild(path);
+    card.appendChild(icon);
+  }
+  var title = document.createElement('h2');
+  title.textContent = options.title;
+  title.style.cssText = 'margin:0 0 8px;font-size:20px;font-weight:500;color:inherit;';
+  card.appendChild(title);
+  var text = document.createElement('p');
+  text.textContent = options.text;
+  text.style.cssText = 'margin:0;color:var(--h3d-text2,#b4b4c4);';
+  card.appendChild(text);
+  var actions = options.actions || [];
+  if (actions.length) {
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:20px;';
+    actions.forEach(function (action) {
+      var button = document.createElement(action.href ? 'a' : 'button');
+      button.textContent = action.label;
+      if (action.href) {
+        button.href = action.href;
+      }
+      if (action.onClick) {
+        button.addEventListener('click', function (ev) {
+          ev.preventDefault();
+          action.onClick();
+        });
+      }
+      button.style.cssText =
+        'display:inline-block;padding:9px 20px;border-radius:18px;cursor:pointer;text-decoration:none;' +
+        'font:500 14px/1.3 inherit;font-family:inherit;' +
+        (action.primary
+          ? 'border:0;background:var(--h3d-primary,#03a9f4);color:var(--h3d-on-primary,#fff);'
+          : 'border:1px solid var(--h3d-primary,#03a9f4);background:transparent;color:var(--h3d-primary,#03a9f4);');
+      row.appendChild(button);
+    });
+    card.appendChild(row);
+  }
+  if (options.details) {
+    var details = document.createElement('details');
+    details.style.cssText = 'margin-top:18px;font-size:12px;color:var(--h3d-text2,#b4b4c4);';
+    var summary = document.createElement('summary');
+    summary.textContent = 'Technical details';
+    summary.style.cssText = 'cursor:pointer;color:inherit;';
+    var detailText = document.createElement('div');
+    detailText.textContent = options.details;
+    detailText.style.cssText = 'margin-top:6px;word-break:break-word;color:inherit;';
+    details.appendChild(summary);
+    details.appendChild(detailText);
+    card.appendChild(details);
+  }
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+/** Removes the card shown by showMessageCard, if any. */
+export function hideMessageCard() {
+  var card = document.getElementById('h3d-message');
+  if (card) {
+    card.remove();
+  }
+}

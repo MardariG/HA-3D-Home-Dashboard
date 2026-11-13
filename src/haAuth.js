@@ -8,6 +8,8 @@
  *
  *   page  -> panel : sh3d-hello                     (repeated until answered)
  *   panel -> page  : sh3d-config {accessToken, home} (re-sent on token refresh)
+ *   page  -> panel : sh3d-token-refresh             (a request got a 401;
+ *                                                    see requestFreshToken)
  *
  * `home` is the active home: the one the viewer and editor open.
  *
@@ -20,6 +22,7 @@
 var accessToken = null;
 var activeHome = null;
 var panelConfig = null;
+var tokenWaiters = [];
 
 export function setAccessToken(token) {
   accessToken = token || null;
@@ -37,6 +40,38 @@ export function getPanelConfig() {
 /** Name of the home to open (from the panel), "default" before/without it. */
 export function getActiveHome() {
   return activeHome || 'default';
+}
+
+/**
+ * Asks the panel for a renewed access token, for a request that was refused
+ * (401): onDone(true) once it arrived, onDone(false) without a panel or
+ * answer.
+ */
+export function requestFreshToken(onDone) {
+  if (window.parent === window) {
+    onDone(false);
+    return;
+  }
+  var done = false;
+  var finish = function (ok) {
+    if (!done) {
+      done = true;
+      onDone(ok);
+    }
+  };
+  tokenWaiters.push(function () {
+    finish(true);
+  });
+  window.parent.postMessage({ type: 'sh3d-token-refresh' }, window.location.origin);
+  setTimeout(function () {
+    finish(false);
+  }, 8000);
+}
+
+/** HTTP status in an engine load error ("Error: 401 while requesting …"), or 0. */
+export function errorStatus(error) {
+  var match = /\b([1-5]\d\d) while requesting\b/.exec(String(error));
+  return match ? parseInt(match[1], 10) : 0;
 }
 
 export function installAuthXhr() {
@@ -72,6 +107,9 @@ export function requestPanelConfig(onConfig, onTimeout) {
       return;
     }
     setAccessToken(ev.data.accessToken);
+    tokenWaiters.splice(0).forEach(function (waiter) {
+      waiter();
+    });
     if (!configReceived) {
       configReceived = true;
       panelConfig = ev.data;

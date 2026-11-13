@@ -44,7 +44,10 @@ import { installEditorBindings } from './editorBindings.js';
 import { installAdvancedUi } from './advancedUi.js';
 import { installEditorTheme, followThemeInPlans } from './editorTheme.js';
 import { installHomes, createHomePicker } from './homes.js';
-import { installAuthXhr, requestPanelConfig, getActiveHome, getPanelConfig } from './haAuth.js';
+import {
+  installAuthXhr, requestPanelConfig, getActiveHome, getPanelConfig, requestFreshToken, errorStatus
+} from './haAuth.js';
+import { showSignInRefused, showLoadFailed, showNotInPanel } from './homeMessages.js';
 
 function initEditor() {
   installZipRequestDeduplication();
@@ -147,30 +150,51 @@ function initEditor() {
     : window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1) +
       'assets/default.sh3d';
 
-  application.getHomeRecorder().readHome(homeURL, {
-    homeLoaded: function (home) {
-      home.setName(__HA_BUILD__ ? getActiveHome() : homeURL);
+  var startEmpty = function () {
+    try {
+      var home = new window.Home();
+      home.setName(__HA_BUILD__ ? getActiveHome() : 'Untitled');
       application.addHome(home);
-    },
-    homeError: function (err) {
+    } catch (e) {
       // eslint-disable-next-line no-console
-      console.warn(
-        '[SweetHome3D] Could not load',
-        homeURL,
-        '-- starting with empty home.',
-        err
-      );
-      try {
-        var home = new window.Home();
-        home.setName(__HA_BUILD__ ? getActiveHome() : 'Untitled');
+      console.error('[SweetHome3D] Failed to create empty home:', e);
+    }
+  };
+
+  var readHome = function (retried) {
+    application.getHomeRecorder().readHome(homeURL, {
+      homeLoaded: function (home) {
+        home.setName(__HA_BUILD__ ? getActiveHome() : homeURL);
         application.addHome(home);
-      } catch (e) {
+      },
+      homeError: function (err) {
         // eslint-disable-next-line no-console
-        console.error('[SweetHome3D] Failed to create empty home:', e);
-      }
-    },
-    progression: function () { /* no-op */ }
-  });
+        console.warn('[SweetHome3D] Could not load', homeURL, err);
+        if (!__HA_BUILD__) {
+          startEmpty();
+          return;
+        }
+        var code = errorStatus(err);
+        if (code === 404) {
+          // No such home yet: start it empty, saved under its name
+          startEmpty();
+        } else if ((code === 401 || code === 403) && !retried) {
+          // Most likely an expired access token: renew it once and retry
+          requestFreshToken(function () {
+            readHome(true);
+          });
+        } else if (code === 401 || code === 403) {
+          showSignInRefused(String(err));
+        } else {
+          // Never an empty home here: saving it would replace the real one
+          showLoadFailed(getActiveHome(), String(err),
+            [{ label: 'Back to the dashboard', href: 'index.html' + window.location.search }]);
+        }
+      },
+      progression: function () { /* no-op */ }
+    });
+  };
+  readHome(false);
 
   // Handy handle for poking at the app from DevTools.
   window.__sh3dApp = application;
@@ -236,14 +260,10 @@ function boot() {
     // The homes API requires auth: get the access token from the panel
     // before the application starts reading the home (see src/haAuth.js).
     installAuthXhr();
-    requestPanelConfig(initEditor, function () {
-      document.body.insertAdjacentHTML(
-        'afterbegin',
-        '<pre style="color:#c0392b;padding:20px;font-family:monospace;">' +
-          'No connection to Home Assistant — open this page through the 3D Dashboard sidebar panel.' +
-          '</pre>'
-      );
-    });
+    requestPanelConfig(initEditor, showNotInPanel);
+  } else if (__HA_BUILD__) {
+    // Opened on its own: the homes API needs the panel's sign-in
+    showNotInPanel();
   } else {
     initEditor();
   }

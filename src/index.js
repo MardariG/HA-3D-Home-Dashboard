@@ -9,7 +9,10 @@
 
 import { addModeToggle, showUpdateNotice } from './haMode.js';
 import { installZipRequestDeduplication } from './zipDedupe.js';
-import { installAuthXhr, requestPanelConfig, getActiveHome, getPanelConfig } from './haAuth.js';
+import {
+  installAuthXhr, requestPanelConfig, getActiveHome, getPanelConfig, requestFreshToken, errorStatus
+} from './haAuth.js';
+import { showNoHome, showSignInRefused, showLoadFailed, showNotInPanel } from './homeMessages.js';
 import { initDashboard } from './dashboard3d.js';
 import { installBindings3D } from './bindings3d.js';
 
@@ -25,10 +28,15 @@ function start() {
   if (__HA_BUILD__ && window.parent !== window) {
     showUpdateNotice(getPanelConfig());
   }
+  loadHome(false);
+}
+
+function loadHome(retried) {
+  var homeName = getActiveHome();
   initDashboard({
     // The active home, chosen in the editor (see src/homes.js)
     homeUrl: __HA_BUILD__
-      ? '/api/home_3d_dashboard/homes/' + encodeURIComponent(getActiveHome())
+      ? '/api/home_3d_dashboard/homes/' + encodeURIComponent(homeName)
       : 'assets/default.sh3d',
     container: document.getElementById('container'),
     onStatus: status,
@@ -39,9 +47,28 @@ function start() {
       }
     },
     onError: function (message) {
-      status(__HA_BUILD__
-        ? 'No home found yet — click "Edit" (top right) to build one. (' + message + ')'
-        : 'Could not load home: ' + message);
+      if (!__HA_BUILD__) {
+        status('Could not load home: ' + message);
+        return;
+      }
+      var code = errorStatus(message);
+      if ((code === 401 || code === 403) && !retried) {
+        // Most likely an expired access token: renew it once and retry
+        status('Signing in…');
+        requestFreshToken(function () {
+          loadHome(true);
+        });
+        return;
+      }
+      status('');
+      if (code === 404) {
+        showNoHome(homeName, 'editor.html' + window.location.search);
+      } else if (code === 401 || code === 403) {
+        showSignInRefused(message);
+      } else {
+        showLoadFailed(homeName, message,
+          [{ label: 'Open the editor', href: 'editor.html' + window.location.search }]);
+      }
     }
   });
 }
@@ -55,8 +82,13 @@ function boot() {
     // before the engine starts fetching (see src/haAuth.js).
     installAuthXhr();
     requestPanelConfig(start, function () {
-      status('No connection to Home Assistant — open this page through the 3D Dashboard sidebar panel.');
+      status('');
+      showNotInPanel();
     });
+  } else if (__HA_BUILD__) {
+    // Opened on its own: the homes API needs the panel's sign-in
+    status('');
+    showNotInPanel();
   } else {
     start();
   }

@@ -11,8 +11,9 @@
  *                     sh3d-toggle        {entityId}
  *                     sh3d-save-mappings {mappings: {pieceId: entityId}, home}
  *                     sh3d-active-home   {home} (editor opened/created a home)
+ *                     sh3d-token-refresh (an API request was refused: 401)
  *   panel -> iframe : sh3d-config        {accessToken, home, homesSupported}
- *                                        (re-sent on token refresh)
+ *                                        (re-sent with each renewed token)
  *                     sh3d-theme         {dark, font, vars} (HA theme, re-sent on change)
  *                     sh3d-init          {mappings, entities}
  *                     sh3d-states        {states: {entityId: state}}
@@ -45,6 +46,8 @@ const THEME_VARIABLES = [
   'secondary-background-color', 'card-background-color', 'divider-color',
   'error-color', 'success-color', 'warning-color',
 ];
+// HA access tokens last 30 minutes; renew this long before they expire
+const TOKEN_MARGIN_MS = 2 * 60 * 1000;
 const BINDABLE_DOMAINS =
   /^(light|switch|fan|cover|lock|media_player|climate|input_boolean|scene|script|vacuum|sensor)\./;
 
@@ -97,6 +100,37 @@ class Home3DDashboardPanel extends HTMLElement {
       && this._hass.auth.data.access_token) || null;
   }
 
+  // The frontend only renews its access token when it needs one (its
+  // websocket stays signed in), so the token it holds may have expired: the
+  // pages' API requests would then be refused (401). `force` renews anyway,
+  // for a page whose request was refused.
+  async _freshToken(force) {
+    const auth = this._hass && this._hass.auth;
+    if (!auth || typeof auth.refreshAccessToken !== 'function') {
+      return;
+    }
+    const expires = auth.data && auth.data.expires;
+    if (force || auth.expired
+        || (typeof expires === 'number' && expires - Date.now() < TOKEN_MARGIN_MS)) {
+      try {
+        await auth.refreshAccessToken();
+      } catch (err) {
+        console.error('[3d-dashboard] access token renewal failed', err);
+      }
+    }
+  }
+
+  // Keeps the pages' token valid while the dashboard stays open
+  async _keepTokenFresh() {
+    if (!this._hass || this._lastToken === null) {
+      return;
+    }
+    await this._freshToken(false);
+    if (this._accessToken() !== this._lastToken) {
+      this._sendConfig();
+    }
+  }
+
   _sendConfig() {
     this._lastToken = this._accessToken();
     this._sendTheme(true);
@@ -113,6 +147,7 @@ class Home3DDashboardPanel extends HTMLElement {
   // Page (re)load: look up the active home (it may have changed on another
   // device), then hand out the config the page waits for.
   async _sendFreshConfig() {
+    await this._freshToken(false);
     try {
       const result = await this._hass.callWS({ type: 'home_3d_dashboard/get_active_home' });
       this._home = (result && result.home) || 'default';
@@ -160,6 +195,8 @@ class Home3DDashboardPanel extends HTMLElement {
     // Re-attached panels (HA keeps them cached) must listen again
     window.addEventListener('message', this._onMessage);
     this._subscribeFurniture();
+    clearInterval(this._tokenTimer);
+    this._tokenTimer = setInterval(() => this._keepTokenFresh(), 60 * 1000);
     if (this._iframe) {
       return;
     }
@@ -176,6 +213,8 @@ class Home3DDashboardPanel extends HTMLElement {
 
   disconnectedCallback() {
     window.removeEventListener('message', this._onMessage);
+    clearInterval(this._tokenTimer);
+    this._tokenTimer = null;
     if (this._furnitureUnsub) {
       this._furnitureUnsub.then((unsub) => unsub()).catch(() => {});
       this._furnitureUnsub = null;
@@ -334,6 +373,12 @@ class Home3DDashboardPanel extends HTMLElement {
           this._sendFreshConfig();
         } else {
           this._helloPending = true;
+        }
+        break;
+      case 'sh3d-token-refresh':
+        // A page's API request was refused: renew, then hand it out
+        if (this._hass) {
+          this._freshToken(true).then(() => this._sendConfig());
         }
         break;
       case 'sh3d-ready':
