@@ -7,9 +7,9 @@
  * and the homes API requires the panel's access token (src/haAuth.js).
  */
 
-import { addModeToggle } from './haMode.js';
+import { addModeToggle, showUpdateNotice } from './haMode.js';
 import { installZipRequestDeduplication } from './zipDedupe.js';
-import { installAuthXhr, requestPanelConfig, getActiveHome } from './haAuth.js';
+import { installAuthXhr, requestPanelConfig, getActiveHome, getPanelConfig } from './haAuth.js';
 import { initDashboard } from './dashboard3d.js';
 import { installBindings3D } from './bindings3d.js';
 
@@ -22,6 +22,9 @@ function status(text) {
 
 function start() {
   installZipRequestDeduplication();
+  if (__HA_BUILD__ && window.parent !== window) {
+    showUpdateNotice(getPanelConfig());
+  }
   initDashboard({
     // The active home, chosen in the editor (see src/homes.js)
     homeUrl: __HA_BUILD__

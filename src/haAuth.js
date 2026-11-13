@@ -19,6 +19,7 @@
 
 var accessToken = null;
 var activeHome = null;
+var panelConfig = null;
 
 export function setAccessToken(token) {
   accessToken = token || null;
@@ -26,6 +27,11 @@ export function setAccessToken(token) {
 
 export function getAccessToken() {
   return accessToken;
+}
+
+/** The panel's first sh3d-config message (null outside the panel). */
+export function getPanelConfig() {
+  return panelConfig;
 }
 
 /** Name of the home to open (from the panel), "default" before/without it. */
@@ -68,6 +74,7 @@ export function requestPanelConfig(onConfig, onTimeout) {
     setAccessToken(ev.data.accessToken);
     if (!configReceived) {
       configReceived = true;
+      panelConfig = ev.data;
       activeHome = typeof ev.data.home === 'string' && ev.data.home ? ev.data.home : null;
       onConfig(ev.data);
     }

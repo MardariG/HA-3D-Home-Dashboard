@@ -75,6 +75,7 @@ async def _setup_integration(hass: HomeAssistant) -> None:
     pack_dir = homes_dir / "furniture"
     frontend_dir = Path(__file__).parent / "frontend"
     await hass.async_add_executor_job(_init_homes_dir, homes_dir, frontend_dir)
+    version = await hass.async_add_executor_job(_integration_version)
     await hass.async_add_executor_job(prepare_pack_dir, pack_dir)
     await hass.async_add_executor_job(_load_data, hass)
     # Heavy immutable assets (engine scripts, icons, 3D models) get long
@@ -139,7 +140,9 @@ async def _setup_integration(hass: HomeAssistant) -> None:
                 "name": "home-3d-dashboard-panel",
                 "embed_iframe": False,
                 "trust_external": False,
-                "js_url": f"{FRONTEND_URL}/panel.js",
+                # Versioned so browsers never keep running an old panel
+                # (and, through it, old pages) after an update
+                "js_url": f"{FRONTEND_URL}/panel.js?v={version}",
             }
         },
         require_admin=False,
@@ -161,6 +164,14 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async_remove_panel(hass, PANEL_URL_PATH)
     hass.data[DOMAIN]["_setup_done"] = False
     return True
+
+
+def _integration_version() -> str:
+    try:
+        manifest = json.loads((Path(__file__).parent / "manifest.json").read_text())
+    except (OSError, ValueError):
+        return "0"
+    return str(manifest.get("version", "0"))
 
 
 def _init_homes_dir(homes_dir: Path, frontend_dir: Path) -> None:

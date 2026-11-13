@@ -72,10 +72,13 @@ sidebar. (Alternatively add `home_3d_dashboard:` to `configuration.yaml`.)
   dimensions stay readable.
 - **Several homes** — *New…* in the simple editor (or *New* in the
   Advanced editor's ⋮ menu) asks for a name and creates an empty home; the
-  previous one stays in your list. *Switch…* (*Open* in the Advanced
-  editor) lists your homes to open one or delete one (except the open
-  one). The dashboard shows the home you last opened, created or saved in
-  the editor, on every device. Each home keeps its own entity bindings.
+  previous one stays in your list. The simple editor's header has a list
+  of your homes: pick one to open it (*Open* in the Advanced editor's ⋮
+  menu), and *Delete…* removes homes you no longer need (except the open
+  one). The dashboard shows the home last opened in the editor, on every
+  device. Each home keeps its own entity bindings.
+  After updating, restart Home Assistant and reload the page: the
+  dashboard shows a notice until both are done.
 - **Native `.sh3d` files** — stored in `<config>/home_3d_dashboard/`, one
   per home (`<name>.sh3d`); interchange freely with the desktop
   [Sweet Home 3D](https://www.sweethome3d.com/) app. A `.sh3d` file copied
@@ -117,7 +120,8 @@ sidebar. (Alternatively add `home_3d_dashboard:` to `configuration.yaml`.)
   viewer are gone; the engine now reads `.sh3d` directly.
 - Previously uploaded models in `<config>/3d_models/` are not migrated —
   re-save them via the editor or copy the `.sh3d` files into
-  `<config>/home_3d_dashboard/`, then open them with *Switch…*.
+  `<config>/home_3d_dashboard/`, then pick them in the editor's list of
+  homes.
 
 ## Development
 
@@ -153,7 +157,8 @@ src/                 # webpack entries (editor.js wires DirectHomeRecorder
                      #   simpleMode.js is the simple editing panel,
                      #   advancedUi.js the Advanced editor's toolbar,
                      #   editorTheme.js/.css the HA theme and styling, and
-                     #   homes.js several homes and the active one)
+                     #   homes.js several homes, the active one and the
+                     #   simple editor's home list)
 public/              # Sweet Home 3D engine: vendor libs, editor sources,
                      #   icons, furniture models (legacy global scripts,
                      #   loaded via <script> tags — see webpack.config.js)

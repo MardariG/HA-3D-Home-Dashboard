@@ -11,7 +11,8 @@
  *                     sh3d-toggle        {entityId}
  *                     sh3d-save-mappings {mappings: {pieceId: entityId}, home}
  *                     sh3d-active-home   {home} (editor opened/created a home)
- *   panel -> iframe : sh3d-config        {accessToken, home} (re-sent on refresh)
+ *   panel -> iframe : sh3d-config        {accessToken, home, homesSupported}
+ *                                        (re-sent on token refresh)
  *                     sh3d-theme         {dark, font, vars} (HA theme, re-sent on change)
  *                     sh3d-init          {mappings, entities, areas, floors}
  *                     sh3d-states        {states: {entityId: state}}
@@ -27,6 +28,16 @@
  */
 
 const FRONTEND_URL = '/home_3d_dashboard-frontend';
+// The integration loads this script as panel.js?v=<version> (__init__.py):
+// the pages get the same query, so a new version never runs old cached
+// pages (their bundles are gone after an update).
+const PANEL_VERSION = (() => {
+  try {
+    return new URL(document.currentScript.src).searchParams.get('v') || '';
+  } catch (err) {
+    return '';
+  }
+})();
 // HA theme variables forwarded to the editor (see src/editorTheme.js)
 const THEME_VARIABLES = [
   'primary-color', 'text-primary-color', 'primary-text-color',
@@ -55,6 +66,7 @@ class Home3DDashboardPanel extends HTMLElement {
     this._lastThemes = null;
     this._lastThemeJson = null;
     this._home = null;
+    this._homesSupported = false;
     this._onMessage = this._onMessage.bind(this);
   }
 
@@ -88,7 +100,14 @@ class Home3DDashboardPanel extends HTMLElement {
   _sendConfig() {
     this._lastToken = this._accessToken();
     this._sendTheme(true);
-    this._post({ type: 'sh3d-config', accessToken: this._lastToken, home: this._home });
+    this._post({
+      type: 'sh3d-config',
+      accessToken: this._lastToken,
+      home: this._home,
+      // False until the integration's new websocket commands answer: Home
+      // Assistant was updated but not restarted yet
+      homesSupported: this._homesSupported,
+    });
   }
 
   // Page (re)load: look up the active home (it may have changed on another
@@ -97,7 +116,9 @@ class Home3DDashboardPanel extends HTMLElement {
     try {
       const result = await this._hass.callWS({ type: 'home_3d_dashboard/get_active_home' });
       this._home = (result && result.home) || 'default';
+      this._homesSupported = true;
     } catch (err) {
+      this._homesSupported = false;
       console.error('[3d-dashboard] get_active_home failed', err);
       this._home = this._home || 'default';
     }
@@ -148,7 +169,7 @@ class Home3DDashboardPanel extends HTMLElement {
     this.style.cssText =
       'display:block;position:relative;height:100vh;height:100dvh;overflow:hidden;';
     this._iframe = document.createElement('iframe');
-    this._iframe.src = `${FRONTEND_URL}/index.html`;
+    this._iframe.src = `${FRONTEND_URL}/index.html` + (PANEL_VERSION ? `?v=${encodeURIComponent(PANEL_VERSION)}` : '');
     this._iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;';
     this.appendChild(this._iframe);
   }

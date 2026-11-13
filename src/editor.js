@@ -38,14 +38,14 @@
 // Home Assistant look (theme colors, toolbar, menus, dialogs): overrides
 // the editor.html styles, and is unrelated to the viewer's styles.css.
 import './editorTheme.css';
-import { addModeToggle } from './haMode.js';
+import { addModeToggle, showUpdateNotice } from './haMode.js';
 import { installZipRequestDeduplication } from './zipDedupe.js';
 import { installEditorBindings } from './editorBindings.js';
 import { installSimpleMode } from './simpleMode.js';
 import { installAdvancedUi } from './advancedUi.js';
 import { installEditorTheme } from './editorTheme.js';
 import { installHomes } from './homes.js';
-import { installAuthXhr, requestPanelConfig, getActiveHome } from './haAuth.js';
+import { installAuthXhr, requestPanelConfig, getActiveHome, getPanelConfig } from './haAuth.js';
 
 function initEditor() {
   installZipRequestDeduplication();
@@ -53,6 +53,7 @@ function initEditor() {
     // Bottom-right corner: keeps clear of the toolbar and the plan pane's
     // level selector at the top right.
     addModeToggle('index.html', 'View', { bottom: 10 });
+    showUpdateNotice(getPanelConfig());
   }
 
   if (typeof window.SweetHome3DJSApplication !== 'function') {

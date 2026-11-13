@@ -112,6 +112,7 @@ var STYLE = [
   '#h3d-simple .h3d-head .h3d-home-row { margin-top: 4px; gap: 10px; }',
   '#h3d-simple span.h3d-home-name { flex: 1; min-width: 0; font-weight: 500; overflow: hidden;',
   '  text-overflow: ellipsis; white-space: nowrap; }',
+  '#h3d-simple select.h3d-home-picker { flex: 1; width: auto; min-width: 0; font-weight: 500; cursor: pointer; }',
   '#h3d-simple span.h3d-status { margin-left: auto; font-size: 12px; color: var(--h3d-text2); }',
   '#h3d-simple span.h3d-status.dirty { color: var(--h3d-warning); }',
   '#h3d-simple .h3d-body { flex: 1; overflow-y: auto; padding: 4px 0 12px; }',
@@ -1371,6 +1372,53 @@ export function installSimpleMode(application, bridge) {
   var panel = el('div', { id: 'h3d-simple' });
   var statusLabel = el('span', { className: 'h3d-status' });
   var homeLabel = el('span', { className: 'h3d-home-name' });
+  // HA build: a list of your saved homes, pick one to open it (src/homes.js)
+  var homeNames = [];
+  var homePicker = typeof controller.openHome === 'function'
+    ? el('select', {
+      className: 'h3d-home-picker',
+      title: 'Your homes: pick one to open it. The dashboard shows the home open here.',
+      'aria-label': 'Home',
+      onfocus: function () { refreshHomeList(); },
+      onchange: function () {
+        var name = homePicker.value;
+        // Stays on this home until the other one has opened (or if the
+        // save question is cancelled)
+        homePicker.value = home.getName() || '';
+        cancelTool();
+        controller.openHome(name);
+      }
+    })
+    : null;
+
+  function refreshHomeList() {
+    if (homePicker) {
+      controller.listHomes(function (names) {
+        homeNames = names;
+        fillHomePicker();
+      });
+    }
+  }
+
+  function fillHomePicker() {
+    var current = home.getName() || '';
+    var names = homeNames.slice();
+    if (names.indexOf(current) < 0) {
+      names.unshift(current);
+    }
+    var key = names.join('\n') + '\n\n' + current;
+    if (homePicker.getAttribute('data-key') === key) {
+      return;
+    }
+    homePicker.setAttribute('data-key', key);
+    homePicker.textContent = '';
+    names.forEach(function (name) {
+      var option = el('option', { value: name, text: '🏠 ' + (name || 'Untitled') });
+      option.selected = name === current;
+      homePicker.appendChild(option);
+    });
+  }
+
   var head = el('div', { className: 'h3d-head' }, [
     el('div', { className: 'h3d-title' }, [
       el('b', { text: 'Edit your home' }),
@@ -1378,8 +1426,10 @@ export function installSimpleMode(application, bridge) {
     ]),
     // Which home this is; the dashboard shows the one open here
     el('div', { className: 'h3d-row h3d-home-row' }, [
-      homeLabel,
-      el('button', { className: 'link', text: 'Switch…', title: 'Open another of your homes (you can delete homes there too)', onclick: function () { cancelTool(); controller.open(); } }),
+      homePicker || homeLabel,
+      homePicker
+        ? el('button', { className: 'link', text: 'Delete…', title: 'Delete homes you no longer need (not the one open here)', onclick: function () { cancelTool(); controller.open(); } })
+        : el('button', { className: 'link', text: 'Switch…', title: 'Open another of your homes', onclick: function () { cancelTool(); controller.open(); } }),
       el('button', { className: 'link', text: 'New…', title: 'Start a new home with its own name; this one stays in the list', onclick: function () { cancelTool(); controller.newHome(); } })
     ]),
     el('div', { className: 'h3d-row' }, [
@@ -1843,6 +1893,10 @@ export function installSimpleMode(application, bridge) {
     var modified = home.isModified();
     statusLabel.textContent = modified ? '● Unsaved changes' : 'Saved';
     statusLabel.classList.toggle('dirty', modified);
+    if (homePicker) {
+      fillHomePicker();
+      return;
+    }
     var name = home.getName() || 'Untitled';
     if (homeLabel.textContent !== '🏠 ' + name) {
       homeLabel.textContent = '🏠 ' + name;
@@ -1904,7 +1958,7 @@ export function installSimpleMode(application, bridge) {
 
   // The View button navigates away: offer to save unsaved changes first.
   function guardViewButton() {
-    var view = document.querySelector('a[href="index.html"]');
+    var view = document.querySelector('a[href^="index.html"]');
     if (!view) {
       return;
     }
@@ -2030,11 +2084,13 @@ export function installSimpleMode(application, bridge) {
   home.getRooms().forEach(rememberRoomPoints);
   home.addSelectionListener(selectionListener);
   home.addPropertyChangeListener('SELECTED_LEVEL', levelListener);
+  refreshHomeList();
 
   application.addHomesListener(function (ev) {
     if (ev.getType() === window.CollectionEvent.Type.ADD && ev.getItem() !== home) {
       cancelTool();
       attachHome(ev.getItem());
+      refreshHomeList();
       // Re-applies the mode to the new home's views (camera, base plan lock)
       setSimple(isSimple());
     }

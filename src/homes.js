@@ -10,6 +10,7 @@
  *   the previous home stays in the list (Open lists, opens and deletes).
  * - Saves go to the home's own name; Save as also copies the bindings.
  * - Opening, creating or renaming a home makes it the active one.
+ * - listHomes/openHome back the simple editor's home picker.
  */
 
 import { getAccessToken } from './haAuth.js';
@@ -59,7 +60,7 @@ function showNameDialog(existingNames, onCreate) {
   var title = el('h2', null, 'New home');
   var hint = el('p', 'h3d-home-hint',
     'Your current home stays in your list of homes: switch back to it or delete it '
-    + 'any time (Switch… in the simple editor, Open in the Advanced editor).');
+    + 'any time (the home list in the simple editor, Open in the Advanced editor).');
   var label = el('label', null, 'Name');
   var input = el('input');
   input.type = 'text';
@@ -167,11 +168,71 @@ export function installHomes(application, bridge) {
     return originalWriteHome.call(this, home, homeName, wrapped);
   };
 
-  // New: ask for a name, then create and save an empty home under it
   var Controller = window.DirectRecordingHomeController;
   if (typeof Controller !== 'function') {
     return;
   }
+
+  /**
+   * Lists the saved homes: onList(names), with [] when they can't be listed.
+   * Used by the simple editor's home picker (src/simpleMode.js).
+   */
+  Controller.prototype.listHomes = function (onList) {
+    var request = recorder.getAvailableHomes({
+      availableHomes: function (names) {
+        onList((names || []).filter(function (name) {
+          return typeof name === 'string';
+        }));
+      },
+      homesError: function () {
+        onList([]);
+      }
+    });
+    if (request == null) {
+      onList([]);
+    }
+  };
+
+  /**
+   * Opens the home saved under `name` in place of this one, asking first to
+   * save unsaved changes (like Open, without its dialog). Opening it makes
+   * it the active home (homes listener above).
+   */
+  Controller.prototype.openHome = function (name) {
+    var controller = this;
+    var current = controller.home;
+    if (!name || name === current.getName()) {
+      return;
+    }
+    var read = function () {
+      recorder.readHome(name, {
+        homeLoaded: function (home) {
+          home.setName(name);
+          controller.close();
+          application.addHome(home);
+        },
+        homeError: function (error) {
+          console.log(error);
+          alert('Couldn\'t open the home "' + name + '".\n' + error);
+        },
+        progression: function () {
+        }
+      });
+    };
+    if (current.isModified() || current.isRecovered()) {
+      controller.getView().confirmSave(current.getName(), function (save) {
+        if (save) {
+          controller.save(read);
+        } else {
+          read();
+        }
+      });
+    } else {
+      read();
+    }
+  };
+
+  // New: ask for a name, then create and save an empty home under it
   Controller.prototype.newHome = function () {
     var controller = this;
     var listed = function (names) {

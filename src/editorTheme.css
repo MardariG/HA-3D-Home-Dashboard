@@ -599,9 +599,21 @@ body.h3d-simple #h3d-more-menu {
 
 /* ------------------------------- dialogs -------------------------------- */
 
+/* Above the simple editor's panel (z-index 9000, src/simpleMode.js), which
+   otherwise covers the left of wide dialogs; the menus and lists dialogs
+   open keep their place above the dialogs (engine: 200 < 1000 < 1100). */
 .dialog-container {
+  z-index: 9500;
   background-color: rgba(0, 0, 0, 0.45);
   font-family: var(--h3d-font);
+}
+
+.popup-menu {
+  z-index: 9600;
+}
+
+.combo-box .selection-panel {
+  z-index: 9700;
 }
 
 .dialog-content {
